@@ -1,0 +1,250 @@
+\documentclass[11pt]{article}
+\newcommand{\LabNumber}{1}
+\newcommand{\LabTitle}{ROM as Control Store}
+\newcommand{\LabTopic}{A microprocessor with no instruction register and no opcode decode -- the ROM word \emph{is} the control word}
+\newcommand{\LabDuration}{2 hours (in-lab)}
+\input{common.tex}
+\usepackage{amssymb}
+\usepackage{graphicx}
+
+\begin{document}
+\labheader
+
+\section*{Objectives}
+\begin{itemize}[leftmargin=*,nosep]
+  \item Explain the difference between a \emph{control-word} machine (this lab,
+        where every ROM bit \emph{is} a control signal directly -- there is no
+        opcode, no Instruction Register, and no decode step at all) and a
+        \emph{hardwired FSM} control unit (Lab 2's EC-1, which decodes an
+        opcode into signals).
+  \item Build a self-addressing program counter: a register that feeds its own next
+        value back from either an incrementer or a ROM-supplied jump address.
+  \item Design the small piece of glue logic that sits \emph{between} the ROM and the
+        PC and decides, every cycle, whether to jump.
+  \item Hand-assemble a control-word microprogram, load it into ROM, and verify a
+        0-to-10 counting sequence cycle by cycle.
+\end{itemize}
+
+\begin{summary}[Quick Reference: The Control Word]
+Program memory is 16 $\times$ 8-bit ROM. Unlike EC-1, there is \textbf{no opcode and
+no operand split} -- every one of the 8 bits drives something directly:
+\begin{center}
+\begin{tabular}{@{}cccccccc@{}}
+\toprule
+\multicolumn{4}{c}{bit 7 \quad\ldots\quad bit 4} & \multicolumn{4}{c}{bit 3 \quad\ldots\quad bit 0} \\
+\midrule
+\texttt{SEQ} & \texttt{LD\_A} & \texttt{CLR\_A} & \texttt{OUT} & \multicolumn{4}{c}{\texttt{ADDR[3:0]}} \\
+\bottomrule
+\end{tabular}
+\end{center}
+\texttt{LD\_A}, \texttt{CLR\_A}, \texttt{OUT} drive the Accumulator side directly.
+\texttt{ADDR[3:0]} is a jump target -- meaningful only when \texttt{SEQ=0}.
+\texttt{SEQ=1} means ``ignore \texttt{ADDR}, just advance to \texttt{PC+1}.''
+There is one piece of logic \emph{outside} the ROM, sitting between it and the PC:
+\[
+\texttt{PC\_load} = \overline{\texttt{SEQ}} \cdot (\texttt{OUT} + \texttt{NEQ\_10})
+\]
+where \texttt{NEQ\_10} is a comparator flag ($=1$ when \texttt{ACC} $\neq 10$).
+When \texttt{PC\_load=1}, \texttt{PC} $\leftarrow$ \texttt{ADDR}; otherwise
+\texttt{PC} $\leftarrow$ \texttt{PC+1}. This one equation is the \emph{entire}
+control unit -- there is nothing else.
+\end{summary}
+
+\subsection*{Datapath}
+
+Figure~\ref{fig:circuit} is the actual Logisim-Evolution circuit you will build --
+build \emph{exactly this}, component for component, using the same names.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{../assets/full-circuit.png}
+\caption{The reference circuit. Left: \texttt{PC\_load} selects the \texttt{MUX}
+feeding \texttt{PC}'s D input, either from the \texttt{+1} adder (constant
+\texttt{1}) or looped back from \texttt{ROM16}'s own low nibble; \texttt{PC}
+addresses \texttt{ROM16} directly (no MAR). Centre: \texttt{ROM16} (16$\times$8)
+splits its output into \texttt{SEQ}, \texttt{CLR\_A}, \texttt{LD\_A}, \texttt{OUT}
+and the 4-bit jump address fed back to the \texttt{MUX}. Right: \texttt{ACC} is a
+register with its own \texttt{+1} adder (constant \texttt{01}) feeding back into
+its D input, a comparator against constant \texttt{0a} (hex \texttt{0x0A}\,=\,10)
+producing \texttt{NEQ\_10}, and a tri-state buffer gated by \texttt{OUT} driving
+the 8-bit \texttt{COUNT} bus and a 7-segment display. Bottom: the AND/OR glue
+logic computing \texttt{PC\_load}, plus \texttt{RESET} and the \texttt{Clock}.}
+\label{fig:circuit}
+\end{figure}
+
+\subsection*{The Microprogram: Count 0 to 10}
+
+\begin{center}
+\begin{tabular}{@{}clccccc c@{}}
+\toprule
+\textbf{Addr} & \textbf{Meaning} & \texttt{SEQ} & \texttt{LD\_A} & \texttt{CLR\_A} & \texttt{OUT} & \texttt{ADDR} & \textbf{Hex} \\
+\midrule
+0 & Clear \texttt{ACC}              & 1 & 0 & 1 & 0 & 0000 & \texttt{0xA0} \\
+1 & Output \texttt{ACC}             & 1 & 0 & 0 & 1 & 0000 & \texttt{0x90} \\
+2 & Increment \texttt{ACC}          & 1 & 1 & 0 & 0 & 0000 & \texttt{0xC0} \\
+3 & Wait (no-op)                 & 1 & 0 & 0 & 0 & 0000 & \texttt{0x80} \\
+4 & Jump to 1 if \texttt{ACC}$\,\neq 10$ & 0 & 0 & 0 & 0 & 0001 & \texttt{0x01} \\
+5 & Jump to self, keep outputting & 0 & 0 & 0 & 1 & 0101 & \texttt{0x15} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent\textbf{Before you build anything:} using the \texttt{PC\_load} equation
+from the summary box, trace what happens at address 4 (\texttt{SEQ=0}) when
+\texttt{ACC}$\,\neq 10$, and separately when \texttt{ACC}$\,=10$. Then trace
+address 5: why, once reached, does the machine loop on itself \emph{forever}
+regardless of \texttt{NEQ\_10}?
+
+\subsection*{Quick Experiments (Try It)}
+
+\begin{tryit}{PC jump mux, in isolation}
+Build just the left portion of Figure~\ref{fig:circuit} (\texttt{PC}, its
+\texttt{+1} adder, the \texttt{MUX} -- feed
+\texttt{ADDR} and \texttt{PC\_load} from switches, not yet from ROM).
+\begin{enumerate}[nosep,leftmargin=*]
+  \item With \texttt{PC\_load=0}, does \texttt{PC} count up on every clock edge?
+  \item Poke \texttt{ADDR=0101} and set \texttt{PC\_load=1}. What is \texttt{PC}
+        after the next clock edge? What if you leave \texttt{PC\_load=1} and keep
+        clocking?
+\end{enumerate}
+\end{tryit}
+
+\begin{tryit}{Accumulator + comparator, in isolation}
+Build just the right-hand portion of Figure~\ref{fig:circuit} (\texttt{ACC}, its
+\texttt{+1} adder, the comparator against \texttt{0a}, and the tri-state buffer --
+feed \texttt{LD\_A}, \texttt{CLR\_A}, \texttt{OUT} from switches).
+\begin{enumerate}[nosep,leftmargin=*]
+  \item Clear \texttt{ACC}, then clock \texttt{LD\_A=1} ten times. Does
+        \texttt{NEQ\_10} go low exactly when \texttt{ACC} reaches \texttt{1010}?
+  \item With \texttt{OUT=0}, does the \texttt{COUNT} bus show anything? What does
+        Logisim display for a tri-state buffer's output when disabled?
+\end{enumerate}
+\end{tryit}
+
+\begin{tryit}{The glue logic alone}
+Build \texttt{PC\_load} $= \overline{\texttt{SEQ}} \cdot (\texttt{OUT} +
+\texttt{NEQ\_10})$ from an AND gate and an OR gate, driven by three switches
+(\texttt{SEQ}, \texttt{OUT}, \texttt{NEQ\_10}). (The reference circuit doesn't use
+a separate NOT gate at all -- it negates the \texttt{SEQ} input pin directly on
+the AND gate. Try building it that way too.)
+\begin{enumerate}[nosep,leftmargin=*]
+  \item Fill in all 8 rows of its truth table by hand, then check every row against
+        your circuit.
+  \item Which single input, if you don't know the other two, tells you the most
+        about whether \texttt{PC\_load} will be 1?
+\end{enumerate}
+\end{tryit}
+
+\section*{In-Lab Exercises (target: 2 hours)}
+
+\begin{labexercise}{PC side \hfill {\small \itshape (25 min)}}
+Build the left portion of Figure~\ref{fig:circuit} in full: the 4-bit \texttt{PC}
+register (\texttt{WE} tied to constant \texttt{1}, so it latches every clock
+edge; \texttt{R} from \texttt{RESET}), its \texttt{+1} adder, and the
+\texttt{MUX}. Wire \texttt{PC}'s output directly to where \texttt{ROM16}'s
+address will go.
+\end{labexercise}
+
+\begin{labexercise}{Accumulator side \hfill {\small \itshape (30 min)}}
+Build \texttt{ACC}: the 4-bit register (\texttt{WE}\,=\,\texttt{LD\_A},
+\texttt{R}\,=\,\texttt{CLR\_A}), its own \texttt{+1} adder feeding back into its
+D input, a tri-state output buffer, and a comparator against constant
+\texttt{0a} (\texttt{0x0A}\,=\,10) producing \texttt{NEQ\_10}.
+\end{labexercise}
+
+\begin{labexercise}{ROM16 and the control word \hfill {\small \itshape (20 min)}}
+Add a 16 $\times$ 8-bit \textbf{ROM} (\texttt{ROM16}), addressed by \texttt{PC}.
+Split its 8-bit output into \texttt{SEQ}, \texttt{CLR\_A}, \texttt{LD\_A},
+\texttt{OUT} (1 bit each) and the 4-bit jump address using a Splitter. Wire the
+three \texttt{ACC} control bits straight to Exercise 2's circuit, and the jump
+address straight to Exercise 1's \texttt{MUX} input \texttt{1}.
+\end{labexercise}
+
+\begin{labexercise}{The glue logic \hfill {\small \itshape (15 min)}}
+Build \texttt{PC\_load} $= \overline{\texttt{SEQ}} \cdot (\texttt{OUT} +
+\texttt{NEQ\_10})$ from Try It 3, and wire it to the \texttt{MUX}'s select
+input. This is the \emph{entire} control unit for this machine -- notice there is
+no state register anywhere in it.
+\end{labexercise}
+
+\begin{labexercise}{Assemble, load, and run \hfill {\small \itshape (30 min)}}
+Wire Exercises 1--4 together exactly as in Figure~\ref{fig:circuit}, with a
+\texttt{Button} for \texttt{RESET}, a \texttt{Clock}, and a \texttt{HexDisplay}
+on \texttt{COUNT}. Hand-assemble the microprogram from the table above and load
+it into \texttt{ROM16} with \emph{Load Image}:
+\begin{lstlisting}
+v2.0 raw
+a0 90 c0 80 01 15 00 00 00 00 00 00 00 00 00 00
+\end{lstlisting}
+Single-step the clock and confirm: \texttt{COUNT} shows \texttt{0, 1, 2,
+\ldots, 10} in turn, one value per pass through address 1, and then the machine
+settles at address 5, continuously re-displaying \texttt{10} forever.
+$\square$~Count sequence matches. $\square$~Machine settles at address 5 (watch
+\texttt{PC} stop advancing past 5).
+\end{labexercise}
+
+\begin{aicollab}
+\textbf{Try these prompts with an AI tool:}
+\begin{itemize}[leftmargin=*,nosep]
+  \item ``What is the architectural difference between a machine where the ROM
+        word is decoded by an FSM, versus one where the ROM word directly drives
+        the datapath?''
+  \item ``Given \texttt{PC\_load = NOT(SEQ) AND (OUT OR NEQ\_10)}, is there a
+        smaller circuit that computes the same function?''
+  \item ``What Logisim-Evolution component implements a 4-bit magnitude
+        comparator, and how do I wire one input to a fixed constant?''
+\end{itemize}
+
+\medskip\textbf{Critical check -- verify, don't just accept:}
+Ask the AI whether this machine's control unit qualifies as a ``Moore machine,''
+a ``Mealy machine,'' both, or neither. Then justify the answer yourself, in
+writing, from the actual circuit -- \texttt{PC\_load} depends combinationally on
+\texttt{NEQ\_10}, which itself depends on the \emph{current} value of a register
+(\texttt{ACC}), not on any external input. Does that change the classification
+the AI gave you?
+
+\medskip\textbf{Know the limit:}
+AI tools often default to describing microprocessors in terms of
+fetch/decode/execute because that is the overwhelmingly common case in their
+training data. This machine has no decode stage at all -- if you ask a leading
+question (``how does this machine decode its opcode?''), many models will
+happily invent a decode step that doesn't exist here rather than telling you the
+premise is wrong.
+\end{aicollab}
+
+\takehomebanner
+
+\begin{trace}[Six clock cycles from reset]
+Assume \texttt{PC} resets to 0. Fill in a table with columns \emph{Cycle, PC,
+Control word (hex), ACC, COUNT} for the first six clock edges. At which cycle
+does \texttt{COUNT} first show a nonzero value?
+\end{trace}
+
+\begin{bug}[A swapped mux input]
+A student wired \texttt{ROM16}'s jump-address field into the \texttt{MUX}'s
+input \texttt{0} and the \texttt{+1} adder into input \texttt{1} (i.e.\ the two
+mux inputs from Figure~\ref{fig:circuit} are swapped), but the \texttt{PC\_load}
+equation is otherwise correct and unchanged. Predict exactly what \texttt{PC}
+does starting from address 0, for at least the first 8 cycles. Does the machine
+still count correctly?
+\end{bug}
+
+\begin{writecode}[Design a count-down microprogram]
+Using the same control-word format, write a new 16-word microprogram that counts
+\emph{down} from 10 to 0 (instead of up), still outputting every value and
+settling into a self-loop at 0. You will need a different comparator target
+(\texttt{NEQ\_0}, i.e.\ \texttt{ACC}$\,\neq 0$) and a decrementer instead of an
+incrementer. Write out the full table (address, mnemonic meaning, all five
+control fields, hex) as in the Quick Reference above.
+\end{writecode}
+
+\begin{drawex}{Control-word datapath, from memory}
+Without looking at Figure~\ref{fig:circuit}, draw the complete datapath from
+memory: \texttt{PC}, its \texttt{+1} adder, the \texttt{MUX}, \texttt{ROM16},
+the Splitter's five output fields, \texttt{ACC}, its own \texttt{+1} adder, the
+tri-state buffer, the comparator, and the glue logic feeding the \texttt{MUX}'s
+select line. Compare against the real figure afterward and mark anything you
+got wrong or omitted.
+\end{drawex}
+
+\end{document}

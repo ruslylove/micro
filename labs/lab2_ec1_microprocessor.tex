@@ -1,5 +1,5 @@
 \documentclass[11pt]{article}
-\newcommand{\LabNumber}{1}
+\newcommand{\LabNumber}{2}
 \newcommand{\LabTitle}{The EC-1 Microprocessor}
 \newcommand{\LabTopic}{ISA, datapath construction, and hardwired FSM control-unit design in Logisim-Evolution}
 \input{common.tex}
@@ -253,6 +253,15 @@ exercise) added as an eighth state. Label its transition from \texttt{DECODE}
 and its return to \texttt{FETCH}. Compare against your original diagram: how many
 new states, gates, and wires did one extra instruction actually cost?
 \end{drawex}
+
+\section*{Reflection}
+
+In one short paragraph, compare EC-1's control unit to Lab 1's control-word
+machine. Both machines execute a sequence of ``instructions'' stored in ROM and
+both can jump conditionally -- but EC-1 has an Instruction Register, an opcode
+field, and a multi-state hardwired FSM, while Lab 1's machine has neither. What
+did EC-1's FSM \emph{buy} you that Lab 1's machine does not have? What did Lab
+1's machine give up to avoid needing one?
 
 \newpage
 \section*{Appendix A: Reference Control-Unit Design (Self-Check)}

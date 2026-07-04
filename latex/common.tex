@@ -1,0 +1,232 @@
+% Shared preamble for Computer Programming lab sheets.
+% Include with \input{common.tex} after \documentclass{article}.
+
+\usepackage[a4paper,margin=2.2cm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{tcolorbox}
+\tcbuselibrary{breakable,skins}
+\usepackage{listings}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{amsmath}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{hyperref}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=black,
+  urlcolor=blue!60!black,
+  pdfborder={0 0 0}
+}
+
+% ---------- Course identity (override per file if needed) ----------
+\providecommand{\CourseName}{Microprocessors}
+\providecommand{\CourseCode}{010153521}
+\providecommand{\Semester}{Semester 1/2026}
+\providecommand{\LabDuration}{3 hours (in-lab)}
+
+% ---------- Colors ----------
+\definecolor{accent}{HTML}{1F4E79}
+\definecolor{accentlight}{HTML}{D9E2EC}
+\definecolor{warn}{HTML}{B45309}
+\definecolor{ok}{HTML}{166534}
+\definecolor{codebg}{HTML}{F6F8FA}
+\definecolor{codeframe}{HTML}{D0D7DE}
+\definecolor{codekw}{HTML}{0550AE}
+\definecolor{codestr}{HTML}{0A7B2C}
+\definecolor{codecom}{HTML}{6E7781}
+
+% ---------- Code / assembly listings ----------
+\lstdefinestyle{c}{
+  language=C,
+  basicstyle=\ttfamily\small,
+  keywordstyle=\color{codekw}\bfseries,
+  stringstyle=\color{codestr},
+  commentstyle=\color{codecom}\itshape,
+  backgroundcolor=\color{codebg},
+  frame=single,
+  rulecolor=\color{codeframe},
+  framerule=0.4pt,
+  showstringspaces=false,
+  breaklines=true,
+  columns=fullflexible,
+  keepspaces=true,
+  tabsize=4,
+  xleftmargin=8pt,
+  xrightmargin=4pt,
+  aboveskip=6pt,
+  belowskip=6pt,
+}
+\lstdefinestyle{asm}{
+  basicstyle=\ttfamily\small,
+  commentstyle=\color{codecom}\itshape,
+  backgroundcolor=\color{codebg},
+  frame=single,
+  rulecolor=\color{codeframe},
+  framerule=0.4pt,
+  showstringspaces=false,
+  breaklines=true,
+  columns=fullflexible,
+  keepspaces=true,
+  tabsize=4,
+  xleftmargin=8pt,
+  xrightmargin=4pt,
+  aboveskip=6pt,
+  belowskip=6pt,
+}
+\lstset{style=asm}
+
+% ---------- Section styling ----------
+\titleformat{\section}{\Large\bfseries\color{accent}}{\thesection.}{0.5em}{}
+\titleformat{\subsection}{\large\bfseries\color{accent!85!black}}{\thesubsection}{0.5em}{}
+\titlespacing*{\section}{0pt}{12pt}{6pt}
+\titlespacing*{\subsection}{0pt}{8pt}{4pt}
+
+% ---------- Page headers/footers ----------
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\CourseName\ifx\CourseCode\empty\else\ (\CourseCode)\fi}
+\fancyhead[C]{\small\Semester}
+\fancyhead[R]{\small\textbf{Lab \LabNumber:} \LabTitle}
+\fancyfoot[C]{\small\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% ---------- Title block ----------
+\newcommand{\labheader}{%
+  \begin{tcolorbox}[
+    enhanced,
+    colback=accentlight,
+    colframe=accent,
+    boxrule=0.5pt,
+    arc=2pt,
+    left=10pt, right=10pt, top=8pt, bottom=8pt
+  ]
+    {\Large\bfseries\color{accent} Lab \LabNumber: \LabTitle}\\[2pt]
+    {\small \CourseName\ifx\CourseCode\empty\else\ (\CourseCode)\fi\quad\textbar\quad \Semester}\\[1pt]
+    {\small \textbf{Duration:} \LabDuration\quad\textbar\quad \textbf{Topic:} \LabTopic}
+  \end{tcolorbox}
+  \vspace{2pt}
+}
+
+% ---------- Custom environments ----------
+\newtcolorbox{summary}[1][Quick Reference]{
+  enhanced,breakable,
+  colback=accentlight!40,colframe=accent!70,
+  title={\bfseries #1},
+  fonttitle=\color{white},
+  attach boxed title to top left={xshift=6pt,yshift=-3pt},
+  boxed title style={colback=accent,boxrule=0pt,arc=2pt},
+  arc=2pt,boxrule=0.4pt,
+  top=12pt,
+}
+
+\newcounter{labex}[section]
+\newtcolorbox{labexercise}[1]{
+  enhanced,breakable,
+  colback=white,colframe=accent,
+  title={\bfseries In-Lab Exercise \refstepcounter{labex}\thelabex: #1},
+  fonttitle=\color{white},
+  attach boxed title to top left={xshift=6pt,yshift=-3pt},
+  boxed title style={colback=accent,boxrule=0pt,arc=2pt},
+  arc=2pt,boxrule=0.4pt,
+  top=12pt,
+}
+
+\newcounter{traceex}
+\newtcolorbox{trace}[1][]{
+  enhanced,breakable,
+  colback=white,colframe=warn,
+  title={\bfseries Trace \& Predict \refstepcounter{traceex}\thetraceex\ifx\\#1\\\else: #1\fi},
+  fonttitle=\color{white},
+  attach boxed title to top left={xshift=6pt,yshift=-3pt},
+  boxed title style={colback=warn,boxrule=0pt,arc=2pt},
+  arc=2pt,boxrule=0.4pt,
+  top=12pt,
+}
+
+\newcounter{bugex}
+\newtcolorbox{bug}[1][]{
+  enhanced,breakable,
+  colback=white,colframe=warn,
+  title={\bfseries Find the Bug \refstepcounter{bugex}\thebugex\ifx\\#1\\\else: #1\fi},
+  fonttitle=\color{white},
+  attach boxed title to top left={xshift=6pt,yshift=-3pt},
+  boxed title style={colback=warn,boxrule=0pt,arc=2pt},
+  arc=2pt,boxrule=0.4pt,
+  top=12pt,
+}
+
+\newcounter{writeex}
+\newtcolorbox{writecode}[1][]{
+  enhanced,breakable,
+  colback=white,colframe=warn,
+  title={\bfseries Write Code on Paper \refstepcounter{writeex}\thewriteex\ifx\\#1\\\else: #1\fi},
+  fonttitle=\color{white},
+  attach boxed title to top left={xshift=6pt,yshift=-3pt},
+  boxed title style={colback=warn,boxrule=0pt,arc=2pt},
+  arc=2pt,boxrule=0.4pt,
+  top=12pt,
+}
+
+% ---------- AI Collaboration box ----------
+\definecolor{aipurple}{HTML}{4C1D95}
+\definecolor{aipurplelight}{HTML}{EDE9FE}
+
+\newtcolorbox{aicollab}[1][AI Collaboration]{
+  enhanced,breakable,
+  colback=aipurplelight,colframe=aipurple!70,
+  title={\bfseries #1},
+  fonttitle=\color{white},
+  attach boxed title to top left={xshift=6pt,yshift=-3pt},
+  boxed title style={colback=aipurple,boxrule=0pt,arc=2pt},
+  arc=2pt,boxrule=0.4pt,
+  top=12pt,
+}
+
+\newcounter{tryex}
+\newtcolorbox{tryit}[1]{
+  enhanced,breakable,
+  colback=ok!6,colframe=ok!70!black,
+  title={\bfseries Try It \refstepcounter{tryex}\thetryex: #1},
+  fonttitle=\color{white},
+  attach boxed title to top left={xshift=6pt,yshift=-3pt},
+  boxed title style={colback=ok!70!black,boxrule=0pt,arc=2pt},
+  arc=2pt,boxrule=0.4pt,
+  top=12pt,
+}
+
+% ---------- Drawing exercise ----------
+\definecolor{drawteal}{HTML}{0D7377}
+\definecolor{drawteallight}{HTML}{D4F1F4}
+
+\newcounter{drawex}
+\newtcolorbox{drawex}[1]{
+  enhanced,breakable,
+  colback=drawteallight,colframe=drawteal!70,
+  title={\bfseries Draw on Paper \refstepcounter{drawex}\thedrawex: #1},
+  fonttitle=\color{white},
+  attach boxed title to top left={xshift=6pt,yshift=-3pt},
+  boxed title style={colback=drawteal,boxrule=0pt,arc=2pt},
+  arc=2pt,boxrule=0.4pt,
+  top=12pt,
+}
+
+
+\newcommand{\takehomebanner}{%
+  \vspace{6pt}
+  \begin{tcolorbox}[
+    colback=warn!10,colframe=warn,boxrule=0.5pt,arc=2pt,
+    left=10pt,right=10pt,top=6pt,bottom=6pt
+  ]
+    \textbf{Take-Home (Paper Work).}\;
+    Solve the following on paper without using a computer or compiler.
+    Hand-write your answers; submit at the start of the next lab.
+    Goal: prepare you to dry-code during the written exam.
+  \end{tcolorbox}
+  \vspace{4pt}
+}

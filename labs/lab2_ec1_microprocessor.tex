@@ -43,8 +43,8 @@ Opcodes \texttt{000}, \texttt{001}, \texttt{010} are unused (no-op: return to \t
 
 \subsection*{EC-1 Datapath}
 
-Figure~\ref{fig:datapath} is the datapath you will build (Lecture 10, Figure 10-1).
-Every control signal (\texttt{IRload}, \texttt{PCload}, \texttt{JNZmux},
+Figure~\ref{fig:datapath-concept} is the conceptual datapath (Lecture 10, Figure
+10-1). Every control signal (\texttt{IRload}, \texttt{PCload}, \texttt{JNZmux},
 \texttt{INmux}, \texttt{Aload}, \texttt{OutE}, \texttt{Reset}, \texttt{Clock}) enters
 from the left; you will design the logic that generates them in Exercise 5.
 
@@ -57,6 +57,23 @@ from the left; you will design the logic that generates them in Exercise 5.
 is no separate address register. Right: Instruction Set Operations (\texttt{INmux},
 the Accumulator \texttt{A}, the 8-bit Decrementer, the zero-check producing
 $(A \neq 0)$, and the tri-state output buffer gated by \texttt{OutE}).}
+\label{fig:datapath-concept}
+\end{figure}
+
+Figure~\ref{fig:datapath} is the reference Logisim-Evolution circuit -- build
+\emph{exactly this}, component for component, using the same signal names.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{../assets/ec1_datapath.png}
+\caption{Reference \texttt{ec1\_datapath} circuit. \texttt{IR} is loaded from
+\texttt{ROM16} (addressed by \texttt{PC}) and split into \texttt{op\_code} (3 bits)
+and the jump address; \texttt{JNZ\_mux} selects between \texttt{PC}'s own
+\texttt{+1} incrementer and that jump address for \texttt{PC}'s \texttt{D} input.
+\texttt{IN\_mux} selects between \texttt{INPUT\_A} and the decrementer's output for
+\texttt{A}'s \texttt{D} input; a comparator against \texttt{0} produces
+\texttt{A\_neq\_0}, and a tri-state buffer gated by \texttt{OUT\_E} drives
+\texttt{OUTPUT\_A}.}
 \label{fig:datapath}
 \end{figure}
 
@@ -174,12 +191,29 @@ Build the 3-bit state register (three D flip-flops, or a Logisim Register), the
 state-decoder gates, and the next-state/output logic directly from \emph{your}
 Exercise 5 design. Wire $(A\neq0)$ in from the Accumulator side and
 \texttt{IR[7:5]} in from \texttt{IR}. Check your design against Appendix~A before
-you wire it up if you want a sanity check.
+you wire it up if you want a sanity check -- Figure~\ref{fig:control} there shows
+a reference circuit, but only look \emph{after} you've built your own.
 \end{labexercise}
 
+Figure~\ref{fig:micro} shows how Exercises 1--6 combine into the top-level
+\texttt{ec1\_micro} circuit for Exercise 7: \texttt{ec1\_datapath} and
+\texttt{ec1\_control} as two subcircuits, with \texttt{Reset} and \texttt{Clock}
+fanning out to both, \texttt{INPUT\_A} entering the datapath, \texttt{OUTPUT\_A}
+driving a hex display, and \texttt{HALT} driving an LED.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{../assets/ec1_micro.png}
+\caption{Reference \texttt{ec1\_micro} top-level circuit: \texttt{ec1\_control} and
+\texttt{ec1\_datapath} wired together with \texttt{Reset}, \texttt{Clock},
+\texttt{INPUT\_A}, \texttt{OUTPUT\_A} (with hex display), and \texttt{HALT}.}
+\label{fig:micro}
+\end{figure}
+
 \begin{labexercise}{Assemble, load, and run \hfill {\small \itshape (20 min)}}
-Wire Exercises 1--6 together following Figure~\ref{fig:datapath}. Hand-assemble the
-countdown program below and load it with ROM's \emph{Load Image}:
+Wire Exercises 1--6 together following Figures~\ref{fig:datapath} and
+\ref{fig:micro}. Hand-assemble the countdown program below and load it with
+ROM's \emph{Load Image}:
 \begin{lstlisting}
 Addr  Hex  Assembly
 00    60   IN A      ; Input to A
@@ -349,5 +383,22 @@ $D_0$ & $= \text{Fetch} + \text{Decode}\cdot O_0\cdot(O_2+O_1) + \text{Halt}$ \\
 \bottomrule
 \end{tabular}
 \end{center}
+
+Figure~\ref{fig:control} is a reference \texttt{ec1\_control} circuit implementing
+the design above -- one way to build it, not the only way. Compare it against your
+own next-state and output equations only \emph{after} you've derived them yourself.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{../assets/ec1_control.png}
+\caption{Reference \texttt{ec1\_control} circuit. \texttt{Op\_code} feeds the
+next-state logic for the \texttt{D0}, \texttt{D1}, \texttt{D2} state flip-flops
+(with \texttt{Reset} and \texttt{Clock}); the resulting 3-bit state, together with
+$(A\neq0)$, drives a decoder/mux (\texttt{Decd}) that asserts \texttt{IR\_load},
+\texttt{IN\_mux}, \texttt{A\_load}, \texttt{PC\_load}, \texttt{JNZ\_mux},
+\texttt{OUT\_E}, and \texttt{HALT} in the correct states, plus the
+\texttt{FETCH}/\texttt{DECODE}/\texttt{EXECUTE} status LEDs.}
+\label{fig:control}
+\end{figure}
 
 \end{document}

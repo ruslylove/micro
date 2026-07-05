@@ -50,6 +50,33 @@ When \texttt{PC\_load=1}, \texttt{PC} $\leftarrow$ \texttt{ADDR}; otherwise
 control unit -- there is nothing else.
 \end{summary}
 
+\begin{summary}[Quick Reference: Control-Word ``ISA'']
+This machine has no fixed opcode field, so there is no fixed instruction set in
+the EC-1 sense -- any of the four control bits can be asserted in any
+combination in a single ROM word (this is \emph{horizontal microcode}). The
+mnemonics below name the single-bit-at-a-time words this lab's programs
+actually use; multiple bits can still be combined in one word (Exercise 5's
+program does exactly that at address 5, combining \texttt{JMP} with \texttt{OUT}).
+\begin{center}
+\small
+\begin{tabular}{@{}p{2.5cm}p{1.7cm}p{3.3cm}p{6.4cm}@{}}
+\toprule
+\textbf{Operation} & \textbf{Mnemonic} & \textbf{Encoding} \newline\texttt{(SEQ LD\_A CLR\_A OUT ADDR)} & \textbf{Effect} \\
+\midrule
+Clear \texttt{ACC}         & \texttt{CLA}       & \texttt{1 0 1 0 0000} & $\texttt{ACC} \leftarrow 0$ \\
+Output \texttt{ACC}        & \texttt{OUTA}      & \texttt{1 0 0 1 0000} & $\text{Output} \leftarrow \texttt{ACC}$ \\
+Increment \texttt{ACC}     & \texttt{INC}       & \texttt{1 1 0 0 0000} & $\texttt{ACC} \leftarrow \texttt{ACC}+1$ \\
+No-op                   & \texttt{NOP}       & \texttt{1 0 0 0 0000} & advance to \texttt{PC+1} only \\
+Jump if $\texttt{ACC}\neq 10$ & \texttt{JNZ10 addr} & \texttt{0 0 0 0 aaaa} & if $\texttt{ACC}\neq 10$: $\texttt{PC}\leftarrow\texttt{addr}$; else $\texttt{PC}\leftarrow\texttt{PC+1}$ \\
+Unconditional jump      & \texttt{JMP addr}  & \texttt{0 0 0 1 aaaa} & $\texttt{PC}\leftarrow\texttt{addr}$ regardless of \texttt{ACC}; also outputs \texttt{ACC} \\
+\bottomrule
+\end{tabular}
+\end{center}
+Note \texttt{JMP}'s encoding is \texttt{JNZ10}'s with \texttt{OUT=1}: from the
+\texttt{PC\_load} equation, \texttt{OUT=1} forces the jump unconditionally, since
+$\texttt{OUT}+\texttt{NEQ\_10}=1$ no matter what \texttt{ACC} holds.
+\end{summary}
+
 \subsection*{Datapath}
 
 Figure~\ref{fig:circuit} is the actual Logisim-Evolution circuit you will build --

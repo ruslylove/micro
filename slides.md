@@ -10,7 +10,7 @@ drawings:
   persist: false
 transition: slide-left
 mdc: true
-download: true
+download: 'https://ruslylove.github.io/micro/slides.pdf'
 presenter: Dr. Ruslee Sutthaweekul
 subject: AVR Microcontroller and Embedded Systems
 ---

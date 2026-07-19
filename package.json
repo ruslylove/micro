@@ -1,9 +1,11 @@
 {
   "name": "micro",
   "version": "1.0.0",
+  "type": "module",
+  "private": true,
   "main": "index.js",
   "scripts": {
-    "dev": "slidev",
+    "dev": "slidev --open",
     "build": "slidev build",
     "export": "slidev export",
     "test": "echo \"Error: no test specified\" && exit 1"

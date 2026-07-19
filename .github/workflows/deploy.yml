@@ -1,0 +1,92 @@
+name: Deploy pages
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 'lts/*'
+          cache: 'npm'
+
+      - name: Decide whether to rebuild PDF
+        id: pdf
+        run: |
+          BUILD=false
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then BUILD=true; fi
+          if [[ "${{ contains(github.event.head_commit.message, '[pdf]') }}" == "true" ]]; then BUILD=true; fi
+          echo "build=$BUILD" >> "$GITHUB_OUTPUT"
+          echo "PDF rebuild: $BUILD"
+
+      - name: Install dependencies
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+        run: npm ci
+
+      - name: Build
+        run: npm run build -- --base /${{ github.event.repository.name }}/
+
+      - name: Restore cached slides.pdf
+        uses: actions/cache@v5
+        with:
+          path: dist/slides.pdf
+          key: slides-pdf-${{ github.sha }}
+          restore-keys: |
+            slides-pdf-
+
+      - name: Cache Playwright browsers
+        if: steps.pdf.outputs.build == 'true'
+        id: playwright-cache
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('**/package-lock.json') }}
+
+      - name: Install Playwright Chromium
+        if: steps.pdf.outputs.build == 'true'
+        run: |
+          if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
+            npx playwright install chromium
+          else
+            npx playwright install --with-deps chromium
+          fi
+
+      - name: Export PDF
+        if: steps.pdf.outputs.build == 'true'
+        run: npm run export -- --output dist/slides.pdf
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v6
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: dist
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    needs: build
+    runs-on: ubuntu-latest
+    name: Deploy
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

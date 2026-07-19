@@ -1,10 +1,10 @@
 ---
 theme: seriph
 background: https://cover.sli.dev
-title: AVR Microcontroller and Embedded Systems
+title: 010153521 Microprocessors
 info: |
-  ## AVR Microcontroller and Embedded Systems
-  Using Assembly and C -- based on Mazidi, Naimi & Naimi.
+  ## 010153521 Microprocessors
+  AVR Microcontroller and Embedded Systems -- Using Assembly and C, based on Mazidi, Naimi & Naimi.
 class: text-center
 drawings:
   persist: false
@@ -12,12 +12,17 @@ transition: slide-left
 mdc: true
 download: 'https://ruslylove.github.io/micro/slides.pdf'
 presenter: Dr. Ruslee Sutthaweekul
-subject: AVR Microcontroller and Embedded Systems
+semester: 1/2026
+subject: 010153521 Microprocessors
 ---
 
 # {{ $slidev.configs.subject }}
 
-Using Assembly and C
+## AVR Microcontroller and Embedded Systems -- Using Assembly and C
+
+Presented by {{ $slidev.configs.presenter }}
+
+Semester {{ $slidev.configs.semester }}
 
 <div @click="$slidev.nav.next" class="mt-12 py-1" hover:bg="white op-10">
   Press Space for next page <carbon:arrow-right />

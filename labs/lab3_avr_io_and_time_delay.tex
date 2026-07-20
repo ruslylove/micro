@@ -1,0 +1,450 @@
+\documentclass[11pt]{article}
+\newcommand{\LabNumber}{3}
+\newcommand{\LabTitle}{AVR I/O and Software Time Delay}
+\newcommand{\LabTopic}{Bare-metal AVR assembly in Microchip Studio, hex upload to an Arduino Uno R3 (ATmega328P) via AVRdude, and oscilloscope-verified software time delays}
+\input{common.tex}
+
+\begin{document}
+\labheader
+
+\section*{Objectives}
+\begin{itemize}[leftmargin=*,nosep]
+  \item Configure a real I/O pin as an output with \texttt{DDRB} and drive it with
+        \texttt{OUT} -- direct I/O addressing on physical hardware, not a simulator
+        (Lecture 2, \S2.2-2.3).
+  \item Write a correct, buildable AVR assembly program in Microchip Studio: correct
+        program structure, \texttt{.INCLUDE}, \texttt{.ORG}, and an initialized stack
+        pointer before any \texttt{CALL}/\texttt{RET} (Lecture 2, \S2.5-2.6; Lecture 3,
+        \S3.2).
+  \item Build single- and nested-counter delay loops with \texttt{DEC}/\texttt{BRNE},
+        wrapped in a \texttt{CALL}/\texttt{RET} subroutine (Lecture 3, \S3.1-3.2).
+  \item Calculate, by hand, the number of loop iterations needed for a target time
+        delay at the Arduino Uno's actual crystal frequency (16 MHz), using the
+        cycle-counting method of Lecture 3, \S3.3.
+  \item Assemble the program to an Intel HEX file and upload it to an Arduino Uno R3
+        using \texttt{avrdude}'s Arduino (bootloader) programmer -- entirely from the
+        command line, without the Arduino IDE.
+  \item Verify the real output waveform on an oscilloscope -- period, frequency, duty
+        cycle -- against your hand calculation, and account for the difference.
+\end{itemize}
+
+\begin{summary}[Quick Reference: I/O on This Board]
+The ATmega328P's data memory, SFR names, and \texttt{IN}/\texttt{OUT} mechanics are
+exactly as in Lecture 2 -- only the chip and the pin names change.
+\begin{center}
+\begin{tabular}{@{}p{3.7cm}p{1.7cm}p{8.9cm}@{}}
+\toprule
+\textbf{Port} & \textbf{Dir. reg.} & \textbf{Arduino Uno pins} \\
+\midrule
+PORTB (\texttt{PB0-PB5}) & \texttt{DDRB} & D8-D13 (\texttt{PB5} = D13, on-board LED) \\
+PORTC (\texttt{PC0-PC5}) & \texttt{DDRC} & A0-A5 \\
+PORTD (\texttt{PD0-PD7}) & \texttt{DDRD} & D0-D7 (\texttt{PD0}/\texttt{PD1} = USB
+\textbf{RXD}/\textbf{TXD} -- do not drive) \\
+\bottomrule
+\end{tabular}
+\end{center}
+\texttt{DDRx} bit = 1 makes that pin an \emph{output}; bit = 0 leaves it an
+\emph{input} (0 is the reset default, i.e. \emph{every} pin starts as an input).
+\texttt{OUT PORTx,Rr} only \emph{drives} a pin once its \texttt{DDRx} bit is set --
+otherwise it just toggles that pin's internal pull-up (see the ``Find the Bug''
+exercise). Register names such as \texttt{PB5} and \texttt{DDRB} come from
+\texttt{m328Pdef.inc}, exactly as \texttt{M32DEF.INC} supplied \texttt{PORTB} in
+Lecture 2's Program 2-1.
+\end{summary}
+
+\begin{summary}[Quick Reference: Delay Math at 16 MHz]
+The Arduino Uno's crystal is \textbf{16 MHz}, so
+$T_{\text{cyc}} = 1/16\text{MHz} = 62.5$~ns -- half the cycle time used in Lecture 3's
+worked examples (mostly 1 MHz or 8 MHz). The delay formula is unchanged:
+\[
+\text{delay} = \big[\,1 + (C \times N) - 1 + 4\,\big] \times T_{\text{cyc}}
+\]
+where $N$ is the loop count (counter register), $C$ is the cycles used per pass
+\emph{including} the branch when it is taken, the leading 1 accounts for loading the
+counter, the $-1$ corrects for the final (non-taken) branch, and the 4 accounts for
+\texttt{RET}.
+
+\textbf{Worked demo (a different target from any lab exercise) -- aim for
+100~\textmu s:} target cycles $= 100{,}000\text{ns} / 62.5\text{ns} = 1600$. Choose
+$N=200$ and pad the loop body with 5 \texttt{NOP}s, so
+$C = 5(\texttt{NOP}) + 1(\texttt{DEC}) + 2(\texttt{BRNE, taken}) = 8$ cycles/pass.
+\[
+\big[\,1 + (8\times200) - 1 + 4\,\big]\times62.5\text{ns} = 1604 \times 62.5\text{ns}
+= 100.25\ \text{\textmu s} \qquad (\text{error} = +0.25\%)
+\]
+Perfect round numbers are rare -- getting within a percent or two of the target and
+then \emph{measuring} the real error on the scope is the point of this lab, not
+hitting the target exactly (see ``Verifying Delays in Practice,'' Lecture 3).
+\end{summary}
+
+\begin{summary}[Quick Reference: Your Individual Target]
+Exercises 2 and 3 ask for \emph{your own} target, not a shared one -- so a copied
+\texttt{.asm} won't hit the right numbers. Derive it from your student ID with this
+hash:
+\[
+D = \text{sum of every digit in your student ID}
+\]
+\begin{center}
+\begin{tabular}{@{}p{5.7cm}p{8.9cm}@{}}
+\toprule
+\textbf{Exercise} & \textbf{Your target} \\
+\midrule
+2 (single-loop delay) & $T_2 = 0.50\text{ ms} + (D \bmod 20) \times 0.05\text{ ms}$ \\
+3 (nested-loop square wave) & $f_3 = 500\text{ Hz} + (D \bmod 30) \times 50\text{ Hz}$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+\textbf{Worked example} (a made-up 13-digit ID, same format as yours -- do not reuse
+these numbers): ID \texttt{1029384756123} $\to$
+$D = 1{+}0{+}2{+}9{+}3{+}8{+}4{+}7{+}5{+}6{+}1{+}2{+}3 = 51$. Then
+$T_2 = 0.50 + (51 \bmod 20)\times0.05 = 0.50 + 11\times0.05 = 1.05$~ms, and
+$f_3 = 500 + (51 \bmod 30)\times50 = 500 + 21\times50 = 1550$~Hz.
+
+Compute your own $D$, $T_2$, and $f_3$ now and record them at the top of your lab
+notebook -- your instructor will spot-check that your measured results match
+\emph{your} numbers. Working in pairs? Use whichever partner's ID is listed first on
+your roster.
+\end{summary}
+
+\section*{Toolchain: From Source Code to Oscilloscope Trace}
+
+\begin{enumerate}[leftmargin=*,nosep]
+  \item Write the \texttt{.asm} source in \textbf{Microchip Studio} (Assembler
+        project, device \texttt{ATmega328P}).
+  \item \textbf{Build} (F7). Studio's assembler produces the usual family of
+        output files (\S2.7) in the project's \texttt{Debug} folder, including a
+        ready-to-burn \texttt{.hex} file and a \texttt{.lst} listing.
+  \item \textbf{(Recommended) Simulate} the \texttt{.hex} in an online simulator
+        such as \textbf{Wokwi} to catch logic mistakes -- \emph{not} timing --
+        before touching the real board.
+  \item Upload the \texttt{.hex} file to the board with \textbf{\texttt{avrdude}},
+        run from a terminal -- \emph{not} Studio's built-in Device Programming
+        dialog, which targets ISP/debugWIRE hardware programmers, not the Uno's
+        onboard USB-serial bootloader.
+  \item Probe the target pin with an \textbf{oscilloscope} and compare the measured
+        waveform against your hand calculation.
+\end{enumerate}
+
+\subsection*{Setting Up the Microchip Studio Project}
+\begin{enumerate}[leftmargin=*,nosep]
+  \item \textbf{File > New > Project... > Assembler > AVR Assembler.} Name the
+        project (e.g. \texttt{Lab3\_Delay}).
+  \item On the device-selection dialog, choose \textbf{ATmega328P} (\emph{not}
+        ATmega328 -- the ``P'' variant is what ships on the Uno R3).
+  \item Replace the generated \texttt{main.asm} with the skeleton in
+        Listing~\ref{lst:skeleton} below.
+\end{enumerate}
+
+\subsection*{The Skeleton Program}
+
+\begin{lstlisting}[caption={Skeleton: blink-check on PB5 (Arduino D13). The delay is
+a placeholder -- not yet timed.},label={lst:skeleton}]
+;Lab 3 skeleton -- Arduino Uno R3 (ATmega328P), 16 MHz crystal
+
+.INCLUDE "m328Pdef.inc"
+
+.ORG 0x0000
+        LDI   R16, HIGH(RAMEND)   ;initialize the stack pointer --
+        OUT   SPH, R16            ;required before any CALL/RCALL/RET
+        LDI   R16, LOW(RAMEND)
+        OUT   SPL, R16
+
+        LDI   R16, (1<<PB5)       ;PB5 = output (Arduino D13), all other
+        OUT   DDRB, R16           ;PORTB pins left as inputs
+
+MAIN:   LDI   R16, (1<<PB5)       ;drive PB5 high
+        OUT   PORTB, R16
+        RCALL DELAY
+        LDI   R16, 0x00           ;drive PB5 low
+        OUT   PORTB, R16
+        RCALL DELAY
+        RJMP  MAIN
+
+;----- delay subroutine (placeholder -- retime this in Exercise 2) -----
+DELAY:  LDI   R20, 0xFF
+AGAIN:  DEC   R20
+        BRNE  AGAIN
+        RET
+\end{lstlisting}
+
+* We do \emph{not} reserve interrupt vector slots: no interrupt is ever enabled in
+this program, so \texttt{.ORG 0x0000} places our first instruction directly at the
+reset vector -- exactly like Program 2-1's \texttt{.ORG 00}.
+
+\subsection*{Simulate First (Recommended): Wokwi}
+
+Before burning a real chip, it is worth checking your program's \emph{logic} in a
+free online simulator such as \textbf{Wokwi} (wokwi.com):
+\begin{enumerate}[leftmargin=*,nosep]
+  \item Start a new Wokwi \textbf{Arduino Uno} project.
+  \item Upload the \texttt{.hex} file Microchip Studio just built as the project's
+        firmware -- Wokwi's Arduino Uno will run any valid AVR \texttt{.hex}, whether
+        or not Wokwi itself compiled it. No Arduino sketch is needed.
+  \item Wire a virtual LED (or Wokwi's logic analyzer) to the pin under test and
+        press Run.
+\end{enumerate}
+This catches the mistakes that have nothing to do with timing -- a missing
+\texttt{DDRB} write, a typo'd register, a loop that never exits -- instantly and for
+free, with no board plugged in.
+
+\textbf{What Wokwi cannot tell you:} its simulated clock is \emph{not} cycle-accurate
+to a real 16 MHz crystal, so it cannot confirm whether your delay actually hits your
+target $T_2$ or $f_3$. Use it only to confirm the waveform's \emph{shape} -- does the
+pin toggle at all, does the counter pattern look right -- never to answer this lab's
+timing questions. Only the physical oscilloscope measurement counts for that.
+
+\subsection*{Uploading with AVRdude}
+
+\texttt{avrdude} talks to the Uno's factory-installed bootloader over the same USB
+cable used for programming from the Arduino IDE -- the \texttt{arduino} programmer ID
+selects the STK500v1 protocol that bootloader speaks, at 115200 baud.
+
+\begin{lstlisting}[language=bash]
+avrdude -c arduino -p atmega328p -P <port> -b 115200 -U flash:w:Lab3_Delay.hex:i
+\end{lstlisting}
+
+\begin{center}
+\begin{tabular}{@{}p{4.2cm}p{8.2cm}@{}}
+\toprule
+\textbf{Flag} & \textbf{Meaning} \\
+\midrule
+\texttt{-c arduino} & Programmer type: Arduino/Optiboot bootloader (STK500v1). \\
+\texttt{-p atmega328p} & Target part. \\
+\texttt{-P <port>} & Serial port: \texttt{COM5} (Windows), \texttt{/dev/cu.usbmodemXXXX}
+(macOS), \texttt{/dev/ttyACM0} (Linux). Some Uno clones use a CH340 USB-serial chip
+and need a separate driver before the port appears. \\
+\texttt{-b 115200} & Bootloader baud rate (Uno-specific; older boards use 19200). \\
+\texttt{-U flash:w:} \texttt{file.hex:i} & Write \texttt{file.hex} (Intel HEX format)
+to flash. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Before uploading:} close the Arduino IDE's Serial Monitor and any terminal
+program holding the port open -- \texttt{avrdude} needs exclusive access, and a busy
+port is the most common upload failure (Appendix A).
+
+\textbf{Never} pass \texttt{-U lfuse:w:...}, \texttt{hfuse}, or \texttt{efuse} on this
+board unless explicitly instructed to. The Uno's fuses are what make the bootloader
+run at power-up; writing the wrong fuse value can make the board unreachable by
+\texttt{avrdude} (a full recovery then needs a hardware ISP programmer).
+
+\subsection*{Connecting the Oscilloscope}
+\begin{itemize}[leftmargin=*,nosep]
+  \item Probe tip on the pin under test (e.g. the D13 header pin); probe ground clip
+        on any Uno \textbf{GND} pin. A shared ground between board and scope is
+        required for a clean trace.
+  \item Start with the vertical scale at 1-2 V/div (logic swings 0-5 V) and the
+        timebase set so that 2-3 full periods fit on screen; then use the scope's
+        auto-measure or cursors to read period, frequency, and duty cycle.
+  \item If the trace looks noisy or doesn't trigger, check that \texttt{DDRB} was
+        actually set for that pin (see the ``Find the Bug'' exercise) before
+        suspecting the scope.
+\end{itemize}
+
+\subsection*{Quick Experiments (Try It)}
+
+\begin{tryit}{Hello, pin 13}
+Build the skeleton exactly as given. If you like, load the \texttt{.hex} into Wokwi
+first and confirm the virtual pin toggles -- a quick, board-free sanity check on the
+\emph{logic}. Then upload the real \texttt{.hex} with \texttt{avrdude} and probe D13.
+The placeholder delay is deliberately \emph{not} timed to anything meaningful --
+you are not trying to see it blink. Confirm only that the scope shows \emph{a}
+periodic square wave: this is your checkpoint that editor $\to$ assembler $\to$
+\texttt{avrdude} $\to$ real hardware all works, before any precision math begins.
+\end{tryit}
+
+\begin{tryit}{Read the .lst file}
+Open the project's \texttt{.lst} listing file (Studio writes it next to the
+\texttt{.hex}) and find the machine code generated for the \texttt{RCALL DELAY} and
+\texttt{BRNE AGAIN} lines.
+\begin{enumerate}[nosep,leftmargin=*]
+  \item Is \texttt{RCALL} 2 bytes or 4, in this listing? Does that match \S3.1's
+        description of \texttt{RCALL} versus \texttt{CALL}?
+  \item Using the addresses shown in the listing (not the source line numbers),
+        recompute \texttt{BRNE AGAIN}'s relative displacement \texttt{k} by hand, the
+        same way Example 3-7 did. Does it match the machine code you see?
+\end{enumerate}
+\end{tryit}
+
+\section*{In-Lab Exercises (target: 3 hours)}
+
+\begin{labexercise}{Toolchain checkpoint \hfill {\small \itshape (25 min)}}
+Repeat Try It 1 as a graded checkpoint: project set up for \texttt{ATmega328P},
+skeleton typed in exactly, built, and uploaded with \texttt{avrdude}. Record the
+exact \texttt{avrdude} command you used (including your port name) and a screenshot
+or sketch of the oscilloscope trace on D13. If \texttt{avrdude} fails to connect,
+work through Appendix A before asking for help.
+\end{labexercise}
+
+\begin{labexercise}{Your precisely timed interval, $T_2$ \hfill {\small \itshape (35 min)}}
+Using the ``Your Individual Target'' box above, compute your own $D$ and $T_2$ if you
+haven't already. Replace the placeholder \texttt{DELAY} subroutine with a
+\emph{single}-counter loop (counter register + \texttt{NOP} padding +
+\texttt{DEC}/\texttt{BRNE}), following the method of the 100~\textmu s worked demo
+above, tuned for a delay as close as possible to \textbf{your $T_2$} at 16 MHz. Show
+your full cycle accounting ($N$, number of \texttt{NOP}s, $C$, total cycles, total
+time, and the \% error against $T_2$) in your lab notebook.
+\begin{enumerate}[nosep,leftmargin=*]
+  \item Wire it into the skeleton's \texttt{MAIN} toggle loop -- with two calls to
+        \texttt{DELAY} per period, PB5 should now produce a square wave with a
+        period of \textbf{$2\times T_2$} (frequency $1/(2T_2)$).
+  \item Build, upload, and measure the actual period and frequency on the
+        oscilloscope. Compute the \% error between your \emph{hand-calculated} period
+        and the \emph{measured} one, and compare it to the \% error you calculated
+        against $T_2$ above -- are they close? If not, what did your hand
+        calculation leave out?
+\end{enumerate}
+\end{labexercise}
+
+\begin{labexercise}{Your square wave with a nested loop, $f_3$ \hfill {\small \itshape (55 min)}}
+A single 8-bit counter tops out at 255 passes -- not enough range for finer control
+without absurd \texttt{NOP} padding. Using your $f_3$ from the box above, design a
+\emph{nested} two-register loop (as in Lecture 3's Example 3-18) for a half-period as
+close as possible to \textbf{$1/(2f_3)$}, giving an overall square wave at
+\textbf{your $f_3$}, roughly 50\% duty-cycle, on PB5.
+\begin{enumerate}[nosep,leftmargin=*]
+  \item Calculate your two register values ($N_1$, $N_2$) and the resulting delay by
+        hand before touching the keyboard.
+  \item Build, upload, and measure the frequency on the oscilloscope.
+  \item Tune your register constants and rebuild until the \emph{measured} frequency
+        is within $\pm 2\%$ of $f_3$ -- a realistic engineering tolerance, not exact
+        equality. Keep a small table in your notebook: attempt \#, $N_1$, $N_2$,
+        calculated period, measured period, \% error.
+\end{enumerate}
+\end{labexercise}
+
+\begin{labexercise}{Binary ripple counter on PORTD \hfill {\small \itshape (35 min)}}
+Combine \S2.2-2.3's \texttt{OUT} addressing with \S3.1-3.3's counting and delay
+techniques: maintain an 8-bit counter register, \texttt{INC} it once per step, shift
+it left \emph{twice} with \texttt{LSL} before each \texttt{OUT PORTD,Rd}, and hold it
+for a fixed per-step delay (reuse or rescale your \texttt{DELAY} subroutine) before
+incrementing again.
+\begin{itemize}[nosep,leftmargin=*]
+  \item The two \texttt{LSL}s matter: they guarantee bits \texttt{PD0}/\texttt{PD1}
+        stay 0 for every count, so the USB-serial lines are never driven while the
+        board stays connected -- only \texttt{PD2} and above carry the counting
+        pattern.
+  \item Probe \textbf{PD2} (the fastest-toggling driven bit). Its period should equal
+        exactly \textbf{twice} your programmed per-step delay -- explain why in terms
+        of how an incrementing binary count flips its LSB.
+  \item Probe \textbf{PD3}. Its period should be exactly \textbf{twice} \texttt{PD2}'s
+        -- verifying, directly on the scope, the binary-counting relationship between
+        adjacent bits.
+\end{itemize}
+\end{labexercise}
+
+\begin{aicollab}
+\textbf{Try these prompts with an AI tool:}
+\begin{itemize}[leftmargin=*,nosep]
+  \item ``I need a nested AVR delay loop as close as possible to my assigned
+        half-period, $1/(2f_3)$, at 16 MHz. Show the cycle-counting, not just a
+        guessed answer.''
+  \item ``What does \texttt{avrdude: stk500\_getsync(): not in sync} mean, and what
+        are the most common causes on an Arduino Uno?''
+  \item ``What is the difference between setting a \texttt{DDRx} bit and setting the
+        corresponding \texttt{PORTx} bit on an AVR pin configured as an input?''
+\end{itemize}
+
+\medskip\textbf{Critical check -- verify, don't just accept:}
+If an AI tool gives you register values for a target delay, do \emph{not} trust the
+number -- redo its cycle count by hand, instruction by instruction, the same way you
+did for the 100~\textmu s demo. Then check it a second way: does the
+\emph{oscilloscope} agree, within a percent or two, with either calculation?
+
+\medskip\textbf{Know the limit:}
+AI tools are good at producing \emph{a} delay loop that is plausible-looking but will
+happily miscount the cycle cost of the final (non-taken) branch, or forget the
+\texttt{RET} overhead entirely -- exactly the kind of off-by-a-few-cycles error that
+is invisible in the source but visible on a scope trace. The oscilloscope is your
+ground truth in this lab, not the AI's arithmetic.
+\end{aicollab}
+
+\takehomebanner
+
+\begin{trace}[Nested-loop delay at 8 MHz]
+For an ATmega32 (a different chip from this lab, running at 8 MHz, so
+$T_{\text{cyc}} = 125$~ns), a nested-loop \texttt{DELAY} subroutine uses
+$N_1 = 20$ (outer) and $N_2 = 150$ (inner), with a 3-cycle inner loop body
+(\texttt{NOP} + \texttt{DEC} + \texttt{BRNE}). Calculate the total delay by hand,
+following the same two-level accounting Example 3-18 used, and give your answer in
+microseconds.
+\end{trace}
+
+\begin{bug}[DDRB never set]
+A student wrote the skeleton's \texttt{MAIN} loop and \texttt{DELAY} subroutine
+correctly, but accidentally deleted the two lines that set \texttt{DDRB} before
+\texttt{MAIN}. The program assembles without errors, and \texttt{avrdude} reports a
+successful upload with no verification failure. Predict, qualitatively, what the LED
+and the oscilloscope trace on D13 will show, and explain \emph{why} -- in terms of
+what a \texttt{DDRx} bit versus a \texttt{PORTx} bit actually controls on a pin that
+is still configured as an input -- even though every instruction executed exactly as
+written.
+\end{bug}
+
+\begin{writecode}[A delay subroutine for a different chip]
+On paper, without a computer, simulator, or AI tool, write a complete
+\texttt{DELAY} subroutine (the two-part structure: set counter(s), then loop) that
+produces as close as possible to \textbf{20 ms} on a chip running at a
+\textbf{4 MHz} crystal. Show every step of your cycle accounting -- the number of
+registers you need, their values, the cycles per pass, and the final delay in
+microseconds compared to the 20 ms target.
+\end{writecode}
+
+\begin{drawex}{Predict, then verify, your $f_3$ trace}
+Before building Exercise 3's program, sketch on paper the oscilloscope trace you
+expect: axes labeled (voltage on $y$, time on $x$), the two logic levels marked
+(0 V / 5 V), and the period, half-period, and duty cycle labeled with numbers.
+After you build, upload, and actually measure it, annotate your sketch with the real
+measured values next to your predicted ones. Are they close? If your predicted duty
+cycle wasn't exactly 50\%, can you identify which part of the code caused the
+asymmetry?
+\end{drawex}
+
+\section*{Reflection}
+
+In one short paragraph, compare this lab's timing model to Lab 1/2's EC-1 machine.
+On EC-1, every state transition took \emph{exactly} one clock edge -- timing was
+deterministic the moment you designed the FSM, with no measurement needed to know how
+long anything took. Here, the ATmega328P's crystal sets a real physical time base,
+but your hand-calculated delay is still only an \emph{approximation} (it ignores
+setup overhead, and your crystal has some tolerance) -- which is why this lab ends
+with an oscilloscope, not just a calculation. What would you need to add to this
+program to make its timing as deterministic as EC-1's, without touching the crystal
+itself? (You are not expected to implement it -- Lecture 3's closing note names the
+AVR feature that does exactly this, covered fully in a later chapter.)
+
+\newpage
+\section*{Appendix A: AVRdude Troubleshooting}
+
+\begin{center}
+\begin{tabular}{@{}p{5.4cm}p{6.8cm}@{}}
+\toprule
+\textbf{Message / symptom} & \textbf{Likely cause and fix} \\
+\midrule
+\texttt{stk500\_getsync(): attempt N of 10: not in sync} &
+Wrong port, or the bootloader isn't listening. Double-check \texttt{-P}; press the
+Uno's reset button just before running \texttt{avrdude} if auto-reset (via DTR)
+isn't working. \\
+\addlinespace
+Port open/permission error (e.g. \texttt{Resource busy}, \texttt{Access is denied}) &
+Another program (Arduino IDE Serial Monitor, a terminal, Microchip Studio's own
+terminal) is holding the port open. Close it and retry. \\
+\addlinespace
+Port does not appear in the OS's device list at all &
+Driver missing for a CH340/CH341 clone USB-serial chip; install the vendor driver.
+On macOS/Linux, list ports with \texttt{ls /dev/cu.*} or \texttt{ls /dev/tty*} before
+and after plugging in the board to spot it. \\
+\addlinespace
+\texttt{avrdude: verification error, first mismatch at byte 0x0000} &
+Flash didn't actually update -- often a stale \texttt{.hex} from a failed rebuild.
+Rebuild in Studio, confirm the \texttt{.hex} timestamp, and re-upload. \\
+\addlinespace
+Upload succeeds, but the board does nothing new &
+Confirm you're pointing \texttt{avrdude} at the \texttt{.hex} you just rebuilt (check
+the path/timestamp), not an old one from an earlier exercise. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\end{document}

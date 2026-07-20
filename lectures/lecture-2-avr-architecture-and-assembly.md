@@ -337,31 +337,65 @@ layout: two-cols
 
 **Table 2-2: two-operand instructions**
 
-| Instr. | Operands | Meaning |
-|---|---|---|
-| `ADD` | Rd,Rr | Rd = Rd + Rr |
-| `ADC` | Rd,Rr | Rd = Rd + Rr + C |
-| `AND` | Rd,Rr | Rd = Rd AND Rr |
-| `EOR` | Rd,Rr | Rd = Rd XOR Rr |
-| `OR`  | Rd,Rr | Rd = Rd OR Rr |
-| `SBC` | Rd,Rr | Rd = Rd - Rr - C |
-| `SUB` | Rd,Rr | Rd = Rd - Rr |
+<div style="font-size:0.7em">
+
+$$
+\begin{array}{|l|l|l|}
+\hline
+\textbf{Instr.} & \textbf{Operands} & \textbf{Meaning} \\
+\hline
+\texttt{ADD} & Rd,Rr & Rd = Rd + Rr \\
+\hline
+\texttt{ADC} & Rd,Rr & Rd = Rd + Rr + C \\
+\hline
+\texttt{AND} & Rd,Rr & Rd = Rd \text{ AND } Rr \\
+\hline
+\texttt{EOR} & Rd,Rr & Rd = Rd \text{ XOR } Rr \\
+\hline
+\texttt{OR} & Rd,Rr & Rd = Rd \text{ OR } Rr \\
+\hline
+\texttt{SBC} & Rd,Rr & Rd = Rd - Rr - C \\
+\hline
+\texttt{SUB} & Rd,Rr & Rd = Rd - Rr \\
+\hline
+\end{array}
+$$
+
+</div>
 
 ::right::
 
 **Table 2-3: single-operand instructions**
 
-| Instr. | Operand | Meaning |
-|---|---|---|
-| `CLR` | Rd | Clear Rd |
-| `INC` | Rd | Rd = Rd + 1 |
-| `DEC` | Rd | Rd = Rd - 1 |
-| `COM` | Rd | One's complement Rd |
-| `NEG` | Rd | Two's complement Rd |
-| `ROL`/`ROR` | Rd | Rotate left/right through carry |
-| `LSL`/`LSR` | Rd | Logical shift left/right |
-| `ASR` | Rd | Arithmetic shift right |
-| `SWAP` | Rd | Swap nibbles in Rd |
+<div style="font-size:0.7em">
+
+$$
+\begin{array}{|l|l|l|}
+\hline
+\textbf{Instr.} & \textbf{Operand} & \textbf{Meaning} \\
+\hline
+\texttt{CLR} & Rd & \text{Clear } Rd \\
+\hline
+\texttt{INC} & Rd & Rd = Rd + 1 \\
+\hline
+\texttt{DEC} & Rd & Rd = Rd - 1 \\
+\hline
+\texttt{COM} & Rd & \text{One's complement } Rd \\
+\hline
+\texttt{NEG} & Rd & \text{Two's complement } Rd \\
+\hline
+\texttt{ROL/ROR} & Rd & \text{Rotate left/right through carry} \\
+\hline
+\texttt{LSL/LSR} & Rd & \text{Logical shift left/right} \\
+\hline
+\texttt{ASR} & Rd & \text{Arithmetic shift right} \\
+\hline
+\texttt{SWAP} & Rd & \text{Swap nibbles in } Rd \\
+\hline
+\end{array}
+$$
+
+</div>
 
 ---
 
@@ -453,6 +487,8 @@ image: /ch2_sreg_bits.png
 
 ## SREG Flag Bits
 
+<div class="text-sm">
+
 | Flag | Meaning |
 |---|---|
 | **C** | Carry -- set on a carry/borrow out of bit D7 |
@@ -463,6 +499,8 @@ image: /ch2_sreg_bits.png
 | **H** | Half carry -- carry from D3 to D4 (used for BCD) |
 | **T** | Bit copy storage |
 | **I** | Global interrupt enable |
+
+</div>
 
 ---
 layout: two-cols
@@ -502,20 +540,33 @@ Z = 1 (result is 0)
 
 **Table 2-4 (abridged): instructions and the flags they affect**
 
-| Instr. | C | Z | N | V | S | H |
-|---|---|---|---|---|---|---|
-| `ADD`, `ADC` | X | X | X | X | X | X |
-| `SUB`, `SUBI` | X | X | X | X | X | X |
-| `AND`, `OR` | | X | X | X | X | |
-| `INC`, `DEC` | | X | X | X | X | |
-| `COM` | X | X | X | X | X | |
-| `TST` | | X | X | X | X | |
+$$
+\begin{array}{|l|c|c|c|c|c|c|}
+\hline
+\textbf{Instr.} & C & Z & N & V & S & H \\
+\hline
+\texttt{ADD, ADC} & X & X & X & X & X & X \\
+\hline
+\texttt{SUB, SUBI} & X & X & X & X & X & X \\
+\hline
+\texttt{AND, OR} & \text{ } & X & X & X & X & \text{ } \\
+\hline
+\texttt{INC, DEC} & \text{ } & X & X & X & X & \text{ } \\
+\hline
+\texttt{COM} & X & X & X & X & X & \text{ } \\
+\hline
+\texttt{TST} & \text{ } & X & X & X & X & \text{ } \\
+\hline
+\end{array}
+$$
 
 *Full list in Appendix A of the textbook. `X` means the bit can become 0 or 1.*
 
 ---
 
 ## Table 2-5: Branch Instructions Using Flags
+
+<div class="text-sm">
 
 | Instruction | Action |
 |---|---|
@@ -527,6 +578,8 @@ Z = 1 (result is 0)
 | `BRPL` | Branch if N = 0 |
 | `BRVS` | Branch if V = 1 |
 | `BRVC` | Branch if V = 0 |
+
+</div>
 
 *These instructions are the basis for `if`-like decisions and loops in AVR assembly -- covered in full in Chapter 3.*
 
@@ -688,6 +741,8 @@ graph TD
 
 ::right::
 
+<div class="text-sm">
+
 | Extension | Contents |
 |---|---|
 | `.asm` | source code (ASCII text) |
@@ -696,6 +751,8 @@ graph TD
 | `.eep` | ready to burn into EEPROM |
 | `.lst` | source + opcodes + memory used |
 | `.map` | labels and their values |
+
+</div>
 
 * The assembler will **not** produce a `.hex` file until the source is free of syntax errors.
 
@@ -848,6 +905,8 @@ image: /ch2_harvard_architecture.png
 
 ## Features of RISC, as Implemented in the AVR
 
+<div class="text-sm">
+
 | # | Feature | AVR implementation |
 |---|---|---|
 | 1 | Fixed instruction size | Every instruction is 2 or 4 bytes (never 1 or 3) |
@@ -857,6 +916,8 @@ image: /ch2_harvard_architecture.png
 | 5 | Separate buses | Harvard architecture -- code and data on separate buses |
 | 6 | Hardwired control | No microcode -- instructions decode directly in hardware |
 | 7 | Load/store architecture | No instruction operates directly on external memory; data must be loaded into a GPR first |
+
+</div>
 
 ---
 

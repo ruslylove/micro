@@ -253,18 +253,33 @@ So `FDH = 253`. Example 5-8 stores these three digits into consecutive RAM locat
 
 ## Flags Affected: Arithmetic & Logic Summary
 
-| Instruction | Z | C | N | V | S | H |
-|---|---|---|---|---|---|---|
-| `ADD`, `ADC` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `SUB`, `SUBI`, `SBC`, `SBCI` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `CP`, `CPI`, `CPC` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `NEG` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `INC`, `DEC` | ✓ | — | ✓ | ✓ | ✓ | — |
-| `AND`, `ANDI`, `OR`, `ORI`, `EOR` | ✓ | — | ✓ | 0 | ✓ | — |
-| `COM` | ✓ | 1 | ✓ | 0 | ✓ | — |
-| `MUL`, `MULS`, `MULSU` | ✓ | ✓ | — | — | — | — |
-| `ROL`, `ROR`, `LSL`, `LSR`, `ASR` | ✓ | ✓ | ✓ | ✓ | ✓ | — |
-| `SWAP` | — | — | — | — | — | — |
+$$
+\begin{array}{|l|c|c|c|c|c|c|}
+\hline
+\textbf{Instruction} & Z & C & N & V & S & H \\
+\hline
+\texttt{ADD, ADC} & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark \\
+\hline
+\texttt{SUB, SUBI, SBC, SBCI} & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark \\
+\hline
+\texttt{CP, CPI, CPC} & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark \\
+\hline
+\texttt{NEG} & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark \\
+\hline
+\texttt{INC, DEC} & \checkmark & - & \checkmark & \checkmark & \checkmark & - \\
+\hline
+\texttt{AND, ANDI, OR, ORI, EOR} & \checkmark & - & \checkmark & 0 & \checkmark & - \\
+\hline
+\texttt{COM} & \checkmark & 1 & \checkmark & 0 & \checkmark & - \\
+\hline
+\texttt{MUL, MULS, MULSU} & \checkmark & \checkmark & - & - & - & - \\
+\hline
+\texttt{ROL, ROR, LSL, LSR, ASR} & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & - \\
+\hline
+\texttt{SWAP} & - & - & - & - & - & - \\
+\hline
+\end{array}
+$$
 
 *C = carry/borrow, Z = zero, N = negative (D7), V = overflow, S = N⊕V (true sign), H = half-carry.*
 
@@ -323,6 +338,8 @@ To find the 2's complement representation of a negative number:
 
 ## Range of Signed Byte Operands
 
+<div class="text-sm">
+
 | Decimal | Binary | Hex |
 |---|---|---|
 | −128 | 1000 0000 | 80 |
@@ -335,6 +352,8 @@ To find the 2's complement representation of a negative number:
 | +2 | 0000 0010 | 02 |
 | ... | ... | ... |
 | +127 | 0111 1111 | 7F |
+
+</div>
 
 A signed byte covers **−128 to +127**; unsigned covers **0 to 255**.
 
@@ -596,16 +615,29 @@ CPI  Rd, K     ;Rd - K   (only flags are set)
 
 **Table 5-2: AVR Conditional Branch Instructions**
 
-| Mnemonic | Meaning | Condition |
-|---|---|---|
-| `BREQ` | Branch if equal | Z = 1 |
-| `BRNE` | Branch if not equal | Z = 0 |
-| `BRSH` | Branch if same or higher (unsigned) | C = 0 |
-| `BRLO` | Branch if lower (unsigned) | C = 1 |
-| `BRLT` | Branch if less than (signed) | S = 1 |
-| `BRGE` | Branch if greater or equal (signed) | S = 0 |
-| `BRVS` | Branch if overflow set | V = 1 |
-| `BRVC` | Branch if overflow clear | V = 0 |
+$$
+\begin{array}{|l|l|l|}
+\hline
+\textbf{Mnemonic} & \textbf{Meaning} & \textbf{Condition} \\
+\hline
+\texttt{BREQ} & \text{Branch if equal} & Z = 1 \\
+\hline
+\texttt{BRNE} & \text{Branch if not equal} & Z = 0 \\
+\hline
+\texttt{BRSH} & \text{Branch if same or higher (unsigned)} & C = 0 \\
+\hline
+\texttt{BRLO} & \text{Branch if lower (unsigned)} & C = 1 \\
+\hline
+\texttt{BRLT} & \text{Branch if less than (signed)} & S = 1 \\
+\hline
+\texttt{BRGE} & \text{Branch if greater or equal (signed)} & S = 0 \\
+\hline
+\texttt{BRVS} & \text{Branch if overflow set} & V = 1 \\
+\hline
+\texttt{BRVC} & \text{Branch if overflow clear} & V = 0 \\
+\hline
+\end{array}
+$$
 
 `BRSH`/`BRLO` compare **unsigned** numbers; `BRGE`/`BRLT` compare **signed** numbers.
 
@@ -838,18 +870,37 @@ layout: two-cols-header
 
 **Figure 5-3: BCD Code**
 
-| Digit | BCD |
-|---|---|
-| 0 | 0000 |
-| 1 | 0001 |
-| 2 | 0010 |
-| 3 | 0011 |
-| 4 | 0100 |
-| 5 | 0101 |
-| 6 | 0110 |
-| 7 | 0111 |
-| 8 | 1000 |
-| 9 | 1001 |
+<div style="font-size:0.8em">
+
+$$
+\begin{array}{|c|c|}
+\hline
+\textbf{Digit} & \textbf{BCD} \\
+\hline
+0 & 0000 \\
+\hline
+1 & 0001 \\
+\hline
+2 & 0010 \\
+\hline
+3 & 0011 \\
+\hline
+4 & 0100 \\
+\hline
+5 & 0101 \\
+\hline
+6 & 0110 \\
+\hline
+7 & 0111 \\
+\hline
+8 & 1000 \\
+\hline
+9 & 1001 \\
+\hline
+\end{array}
+$$
+
+</div>
 
 ---
 
@@ -859,14 +910,25 @@ On an ASCII keyboard, pressing "0" sends `30H`; "1" sends `31H`; and so on — A
 
 **Table 5-3**
 
-| Key | ASCII (hex) | Binary | BCD (unpacked) |
-|---|---|---|---|
-| 0 | 30 | 011 0000 | 0000 0000 |
-| 1 | 31 | 011 0001 | 0000 0001 |
-| 2 | 32 | 011 0010 | 0000 0010 |
-| ... | ... | ... | ... |
-| 8 | 38 | 011 1000 | 0000 1000 |
-| 9 | 39 | 011 1001 | 0000 1001 |
+$$
+\begin{array}{|c|c|c|c|}
+\hline
+\textbf{Key} & \textbf{ASCII (hex)} & \textbf{Binary} & \textbf{BCD (unpacked)} \\
+\hline
+0 & 30 & 011\ 0000 & 0000\ 0000 \\
+\hline
+1 & 31 & 011\ 0001 & 0000\ 0001 \\
+\hline
+2 & 32 & 011\ 0010 & 0000\ 0010 \\
+\hline
+\ldots & \ldots & \ldots & \ldots \\
+\hline
+8 & 38 & 011\ 1000 & 0000\ 1000 \\
+\hline
+9 & 39 & 011\ 1001 & 0000\ 1001 \\
+\hline
+\end{array}
+$$
 
 BCD itself is universal across systems; **ASCII** is the standard used by keyboards, printers, and monitors — so conversion between the two is a routine embedded-systems task.
 

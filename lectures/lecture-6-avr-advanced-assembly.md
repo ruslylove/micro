@@ -402,15 +402,27 @@ Because `X`, `Y`, `Z` are ordinary 16-bit registers, there is no `INC Y` instruc
 
 ## Table 6-5: Auto-Increment / Auto-Decrement (for `LD`)
 
-| Instruction | Function |
-|---|---|
-| `LD Rn,X` | After loading via X, X stays the same |
-| `LD Rn,X+` | After loading via X, X is **incremented** |
-| `LD Rn,-X` | X is **decremented**, *then* the location is loaded |
-| `LD Rn,Y` / `Rn,Y+` / `Rn,-Y` | Same pattern for Y |
-| `LDD Rn,Y+q` | Loads Y+q; Y stays the same |
-| `LD Rn,Z` / `Rn,Z+` / `Rn,-Z` | Same pattern for Z |
-| `LDD Rn,Z+q` | Loads Z+q; Z stays the same |
+$$
+\begin{array}{|l|l|}
+\hline
+\textbf{Instruction} & \textbf{Function} \\
+\hline
+\texttt{LD Rn,X} & \text{After loading via X, X stays the same} \\
+\hline
+\texttt{LD Rn,X+} & \text{After loading via X, X is } \textbf{incremented} \\
+\hline
+\texttt{LD Rn,-X} & \text{X is } \textbf{decremented} \text{, then the location is loaded} \\
+\hline
+\texttt{LD Rn,Y / Rn,Y+ / Rn,-Y} & \text{Same pattern for Y} \\
+\hline
+\texttt{LDD Rn,Y+q} & \text{Loads Y+q; Y stays the same} \\
+\hline
+\texttt{LD Rn,Z / Rn,Z+ / Rn,-Z} & \text{Same pattern for Z} \\
+\hline
+\texttt{LDD Rn,Z+q} & \text{Loads Z+q; Z stays the same} \\
+\hline
+\end{array}
+$$
 
 This syntax is shown for `LD`, but it applies to `ST` as well. The auto-inc/dec affects the **whole 16-bit** pointer and does **not** touch any SREG flag — wrap-around from `$FFFF` to `$0000` raises no flag.
 
@@ -431,7 +443,7 @@ image: /ch6_indirect_inc_dec.png
 
 ## Example 6-5: Copying `$55` into `$140`–`$144`, Three Ways
 
-```asm {*|2-7|9-19|21-28}{lines:true}
+```asm {*|2-7|9-19|21-28}{lines:true,maxHeight:'320px'}
 ; (a) direct addressing -- static, no loop possible
 LDI R17,0x55
 STS 0x140,R17
@@ -530,7 +542,9 @@ LDD R20,Z+5   ;read the byte 5 positions after where Z points
 STD Z+5,R20   ;write R20 five positions after where Z points
 ```
 
-### Example 6-11: `ADD3LOC` — Sum Three Consecutive Locations
+---
+
+## Example 6-11: `ADD3LOC` — Sum Three Consecutive Locations
 
 ```asm {*}{lines:true}
 ADD3LOC:
@@ -757,18 +771,33 @@ Unlike CPUs such as the 386 or Pentium, which only access registers/ports a byte
 
 ## Table 6-7: Single-Bit (Bit-Oriented) Instructions
 
-| Instruction | Function |
-|---|---|
-| `SBI A,b` | Set Bit b in I/O register |
-| `CBI A,b` | Clear Bit b in I/O register |
-| `SBIC A,b` | Skip next instruction if Bit b in I/O register is Cleared |
-| `SBIS A,b` | Skip next instruction if Bit b in I/O register is Set |
-| `BST Rr,b` | Bit store from register Rr to T |
-| `BLD Rd,b` | Bit load from T to Rd |
-| `SBRC Rr,b` | Skip next instruction if Bit b in Register is Cleared |
-| `SBRS Rr,b` | Skip next instruction if Bit b in Register is Set |
-| `BRBS s,k` | Branch if Bit s in status register is Set |
-| `BRBC s,k` | Branch if Bit s in status register is Cleared |
+$$
+\begin{array}{|l|l|}
+\hline
+\textbf{Instruction} & \textbf{Function} \\
+\hline
+\texttt{SBI A,b} & \text{Set Bit b in I/O register} \\
+\hline
+\texttt{CBI A,b} & \text{Clear Bit b in I/O register} \\
+\hline
+\texttt{SBIC A,b} & \text{Skip next instruction if Bit b in I/O register is Cleared} \\
+\hline
+\texttt{SBIS A,b} & \text{Skip next instruction if Bit b in I/O register is Set} \\
+\hline
+\texttt{BST Rr,b} & \text{Bit store from register Rr to T} \\
+\hline
+\texttt{BLD Rd,b} & \text{Bit load from T to Rd} \\
+\hline
+\texttt{SBRC Rr,b} & \text{Skip next instruction if Bit b in Register is Cleared} \\
+\hline
+\texttt{SBRS Rr,b} & \text{Skip next instruction if Bit b in Register is Set} \\
+\hline
+\texttt{BRBS s,k} & \text{Branch if Bit s in status register is Set} \\
+\hline
+\texttt{BRBC s,k} & \text{Branch if Bit s in status register is Cleared} \\
+\hline
+\end{array}
+$$
 
 *Note: `A` can be any location of the I/O register.*
 
@@ -875,21 +904,39 @@ image: /ch6_sreg_bits.png
 
 **Table 6-8 — Conditional Branches** (aliases for `BRBS`/`BRBC`)
 
-| Set (=1) | Clear (=0) | Set (=1) | Clear (=0) |
-|---|---|---|---|
-| `BRCS` (C) | `BRCC` | `BRVS` (V) | `BRVC` |
-| `BREQ` (Z) | `BRNE` | `BRLT` (S) | `BRGE` |
-| `BRMI` (N) | `BRPL` | `BRHS` (H) | `BRHC` |
-| `BRTS` (T) | `BRTC` | `BRIE` (I) | `BRID` |
+$$
+\begin{array}{|l|l|l|l|}
+\hline
+\textbf{Set (=1)} & \textbf{Clear (=0)} & \textbf{Set (=1)} & \textbf{Clear (=0)} \\
+\hline
+\texttt{BRCS (C)} & \texttt{BRCC} & \texttt{BRVS (V)} & \texttt{BRVC} \\
+\hline
+\texttt{BREQ (Z)} & \texttt{BRNE} & \texttt{BRLT (S)} & \texttt{BRGE} \\
+\hline
+\texttt{BRMI (N)} & \texttt{BRPL} & \texttt{BRHS (H)} & \texttt{BRHC} \\
+\hline
+\texttt{BRTS (T)} & \texttt{BRTC} & \texttt{BRIE (I)} & \texttt{BRID} \\
+\hline
+\end{array}
+$$
 
 **Table 6-9 — Flag set/clear** (aliases for `BSET`/`BCLR`)
 
-| Set | Clear | Set | Clear |
-|---|---|---|---|
-| `SEC` (C=1) | `CLC` | `SEV` (V=1) | `CLV` |
-| `SEZ` (Z=1) | `CLZ` | `SES` (S=1) | `CLS` |
-| `SEN` (N=1) | `CLN` | `SEH` (H=1) | `CLH` |
-| `SET` (T=1) | `CLT` | `SEI` (I=1) | `CLI` |
+$$
+\begin{array}{|l|l|l|l|}
+\hline
+\textbf{Set} & \textbf{Clear} & \textbf{Set} & \textbf{Clear} \\
+\hline
+\texttt{SEC (C=1)} & \texttt{CLC} & \texttt{SEV (V=1)} & \texttt{CLV} \\
+\hline
+\texttt{SEZ (Z=1)} & \texttt{CLZ} & \texttt{SES (S=1)} & \texttt{CLS} \\
+\hline
+\texttt{SEN (N=1)} & \texttt{CLN} & \texttt{SEH (H=1)} & \texttt{CLH} \\
+\hline
+\texttt{SET (T=1)} & \texttt{CLT} & \texttt{SEI (I=1)} & \texttt{CLI} \\
+\hline
+\end{array}
+$$
 
 ```asm
 BRCS L1     ;branch if carry flag is set     (same as BRBS 0,L1)
@@ -1163,7 +1210,7 @@ LOADIO SPL,0x55         ;send 0x55 to SPL
 
 ## Program 6-4: Using Macros in a Program
 
-```asm {*|1-4|6-13|15-24}{lines:true}
+```asm {*|1-4|6-13|15-24}{lines:true,maxHeight:'420px'}
 .INCLUDE "M32DEF.INC"
 .MACRO LOADIO
       LDI R20,@1

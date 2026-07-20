@@ -383,6 +383,8 @@ Besides the AVR, several other 8-bit microcontroller families are widely used:
 
 **Table 1-6: Companies Producing Widely Used 8-bit Microcontrollers**
 
+<div class="text-sm">
+
 | Company | Architecture |
 |---|---|
 | Atmel | AVR and 8051 |
@@ -392,6 +394,8 @@ Besides the AVR, several other 8-bit microcontroller families are widely used:
 | Zilog | Z8 and Z80 |
 | Dallas Semi/Maxim | 8051 |
 | Freescale Semi | 68HC11 / HCS08 |
+
+</div>
 
 *See microcontroller.com for a complete list.*
 

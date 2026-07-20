@@ -193,16 +193,29 @@ LOP_1:  COM     R16
 
 * Table 3-1 lists some AVR conditional branch instructions. Each jumps **only if** a specific status-register flag matches the condition; otherwise the CPU falls through to the next instruction.
 
-| Instruction | Action |
-|---|---|
-| `BRLO` | Branch if C = 1 |
-| `BRSH` | Branch if C = 0 |
-| `BREQ` | Branch if Z = 1 |
-| `BRNE` | Branch if Z = 0 |
-| `BRMI` | Branch if N = 1 |
-| `BRPL` | Branch if N = 0 |
-| `BRVS` | Branch if V = 1 |
-| `BRVC` | Branch if V = 0 |
+$$
+\begin{array}{|l|l|}
+\hline
+\textbf{Instruction} & \textbf{Action} \\
+\hline
+\texttt{BRLO} & \text{Branch if C = 1} \\
+\hline
+\texttt{BRSH} & \text{Branch if C = 0} \\
+\hline
+\texttt{BREQ} & \text{Branch if Z = 1} \\
+\hline
+\texttt{BRNE} & \text{Branch if Z = 0} \\
+\hline
+\texttt{BRMI} & \text{Branch if N = 1} \\
+\hline
+\texttt{BRPL} & \text{Branch if N = 0} \\
+\hline
+\texttt{BRVS} & \text{Branch if V = 1} \\
+\hline
+\texttt{BRVC} & \text{Branch if V = 0} \\
+\hline
+\end{array}
+$$
 
 *Table 3-1: AVR Conditional Branch (Jump) Instructions*
 
@@ -534,7 +547,7 @@ AGAIN:
 
 ## Example 3-10: Tracing the Stack Through Two `CALL`s
 
-<img src="/ch3_call_stack_frames.png" style="width:100%">
+<img src="/ch3_call_stack_frames.png" style="max-height:280px; margin: 0 auto; display: block;">
 
 * Before the first `CALL`, `SP = 0x85F`. The first `CALL DELAY` pushes the return address (`0008`) onto the stack: SP becomes `0x85D` (2 bytes pushed).
 * After `RET`, SP returns to `0x85F` and execution resumes at address `0008`.
@@ -698,17 +711,31 @@ $$ \text{machine cycle} = \frac{1}{\text{crystal frequency}} $$
 
 At 1 MHz, the machine cycle is 1 &micro;s (Example 3-14). From Appendix A:
 
-| Instruction | Cycles | Time to execute |
-|---|---|---|
-| `LDI` | 1 | 1 &times; 1 &micro;s = 1 &micro;s |
-| `DEC` | 1 | 1 &micro;s |
-| `OUT` | 1 | 1 &micro;s |
-| `ADD` | 1 | 1 &micro;s |
-| `NOP` | 1 | 1 &micro;s |
-| `JMP` | 3 | 3 &micro;s |
-| `CALL` | 4 | 4 &micro;s |
-| `BRNE` | 2/1 | 2 &micro;s taken, 1 &micro;s if it falls through |
-| `.DEF` | 0 | (directive -- produces no machine instruction) |
+$$
+\begin{array}{|l|c|l|}
+\hline
+\textbf{Instruction} & \textbf{Cycles} & \textbf{Time to execute} \\
+\hline
+\texttt{LDI} & 1 & 1 \times 1\ \mu s = 1\ \mu s \\
+\hline
+\texttt{DEC} & 1 & 1\ \mu s \\
+\hline
+\texttt{OUT} & 1 & 1\ \mu s \\
+\hline
+\texttt{ADD} & 1 & 1\ \mu s \\
+\hline
+\texttt{NOP} & 1 & 1\ \mu s \\
+\hline
+\texttt{JMP} & 3 & 3\ \mu s \\
+\hline
+\texttt{CALL} & 4 & 4\ \mu s \\
+\hline
+\texttt{BRNE} & 2/1 & \text{2 } \mu s \text{ taken, 1 } \mu s \text{ if it falls through} \\
+\hline
+\texttt{.DEF} & 0 & \text{(directive -- produces no machine instruction)} \\
+\hline
+\end{array}
+$$
 
 ---
 
@@ -773,7 +800,7 @@ HERE:   NOP               ; 1
 
 Compare using 12 `NOP`s in a single loop against the nested-loop approach of Example 3-18 (same 1 MHz clock):
 
-```asm {*}{lines:true}
+```asm {*}{lines:true,maxHeight:'220px'}
 DELAY:  LDI   R16, 200
 AGAIN:  NOP                   ; 12 NOPs total, 1 cycle each
         NOP
@@ -803,7 +830,7 @@ AGAIN:  NOP                   ; 12 NOPs total, 1 cycle each
 
 For an ATmega32 at **8 MHz**, toggle all bits of `PORTB` once every 1 second.
 
-```asm {*|1-4|6-18}{lines:true}
+```asm {*|1-4|6-18}{lines:true,maxHeight:'260px'}
 BACK:   COM    R16
         OUT    PORTB, R16
         CALL   DELAY_1S

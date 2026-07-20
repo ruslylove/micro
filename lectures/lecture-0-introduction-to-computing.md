@@ -134,6 +134,8 @@ Sum: 16 + 8 + 0 + 0 + 1 = **25<sub>10</sub>**
 
 **Table 0-1: Base 16 Number System**
 
+<div class="text-sm">
+
 | Decimal | Binary | Hex | &nbsp; | Decimal | Binary | Hex |
 | :-----: | :----: | :-: | ------ | :-----: | :----: | :-: |
 | 0 | 0000 | 0 | | 8  | 1000 | 8 |
@@ -144,6 +146,8 @@ Sum: 16 + 8 + 0 + 0 + 1 = **25<sub>10</sub>**
 | 5 | 0101 | 5 | | 13 | 1101 | D |
 | 6 | 0110 | 6 | | 14 | 1110 | E |
 | 7 | 0111 | 7 | | 15 | 1111 | F |
+
+</div>
 
 ---
 layout: two-cols
@@ -296,6 +300,8 @@ layout: two-cols
 
 **Figure 0-1: Selected ASCII Codes**
 
+<div class="text-sm">
+
 | Hex | Symbol | &nbsp; | Hex | Symbol |
 | :-: | :----: | ------ | :-: | :----: |
 | 41 | A | | 61 | a |
@@ -305,6 +311,8 @@ layout: two-cols
 | ... | ... | | ... | ... |
 | 59 | Y | | 79 | y |
 | 5A | Z | | 7A | z |
+
+</div>
 
 ---
 
@@ -569,6 +577,8 @@ layout: two-cols
 
 **Table 0-4: Powers of 2 (excerpt)**
 
+<div class="text-sm">
+
 | x | 2<sup>x</sup> |
 | :-: | :----: |
 | 10 | 1K |
@@ -579,6 +589,8 @@ layout: two-cols
 | 20 | 1M |
 | 24 | 16M |
 | 27 | 128M |
+
+</div>
 
 ---
 layout: two-cols
@@ -810,6 +822,8 @@ image: /ch0_cpu_block_diagram.png
 
 Program stored starting at address 1400H:
 
+<div class="text-sm">
+
 | Address | Contents |
 | :-----: | -------------------------------- |
 | 1400 | B0 -- code: move value to register A |
@@ -819,6 +833,8 @@ Program stored starting at address 1400H:
 | 1404 | 04 -- code: add value to register A |
 | 1405 | 12 -- value to be added |
 | 1406 | F4 -- code for halt |
+
+</div>
 
 ---
 

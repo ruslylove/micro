@@ -1,0 +1,535 @@
+\documentclass[11pt]{article}
+\newcommand{\LabNumber}{4.2}
+\newcommand{\LabTitle}{KiCad Schematic \& PCB}
+\newcommand{\LabTopic}{Capturing the Lab 4-1 I/O circuit as a KiCad schematic and routing it into a real \emph{Arduino Uno shield} -- a two-layer PCB that stacks directly onto the Uno's own header pins -- optionally fabricated via PCBWay}
+\newcommand{\LabDuration}{3 hours (in-lab)}
+\input{common.tex}
+\usepackage{tikz}
+\definecolor{pcbgreen}{HTML}{0B6E4F}
+\definecolor{pcbgreendark}{HTML}{06432F}
+\definecolor{silk}{HTML}{F5F5F5}
+\definecolor{copper}{HTML}{C9A227}
+\definecolor{pad}{HTML}{D8D8D8}
+\definecolor{compblack1}{HTML}{1A1A1A}
+\definecolor{compblack2}{HTML}{000000}
+\definecolor{compgray1}{HTML}{9A9A9A}
+\definecolor{compgray2}{HTML}{5A5A5A}
+
+\newcommand{\drawbox}[8]{%
+  % #1,#2,#3 = x0,y0,z0   #4,#5,#6 = dx,dy,dz   #7 = top color  #8 = side color
+  \fill[#7] (#1,#2,#3+#6) -- (#1+#4,#2,#3+#6) -- (#1+#4,#2+#5,#3+#6) -- (#1,#2+#5,#3+#6) -- cycle;
+  \fill[#8] (#1,#2,#3) -- (#1+#4,#2,#3) -- (#1+#4,#2,#3+#6) -- (#1,#2,#3+#6) -- cycle;
+  \fill[#8!55!black] (#1+#4,#2,#3) -- (#1+#4,#2+#5,#3) -- (#1+#4,#2+#5,#3+#6) -- (#1+#4,#2,#3+#6) -- cycle;
+  \draw[black, thin] (#1,#2,#3+#6) -- (#1+#4,#2,#3+#6) -- (#1+#4,#2+#5,#3+#6) -- (#1,#2+#5,#3+#6) -- cycle;
+  \draw[black, thin] (#1,#2,#3) -- (#1+#4,#2,#3) -- (#1+#4,#2,#3+#6) -- (#1,#2,#3+#6) -- cycle;
+  \draw[black, thin] (#1+#4,#2,#3) -- (#1+#4,#2+#5,#3) -- (#1+#4,#2+#5,#3+#6) -- (#1+#4,#2,#3+#6) -- cycle;
+}
+
+\begin{document}
+\labheader
+
+\section*{Objectives}
+\begin{itemize}[leftmargin=*,nosep]
+  \item Capture the \emph{exact} circuit you breadboarded and tested in
+        \textbf{Lab 4-1} as a schematic in \textbf{KiCad}, assign footprints, and lay
+        it out into a two-layer PCB that passes Electrical Rules Check (ERC) and
+        Design Rules Check (DRC).
+  \item Design the board in \textbf{Arduino Uno shield form factor}: the exact
+        board outline and header positions the Uno itself uses, so your finished
+        PCB \emph{stacks directly} onto the Uno's own pins -- no jumper wires --
+        instead of connecting through a generic pin header.
+  \item Generate Gerber and drill files -- the manufacturing handoff format every
+        PCB fab, including PCBWay, expects.
+  \item (Optional) Submit your Gerbers to \textbf{PCBWay} and order your own
+        manufactured board.
+\end{itemize}
+
+\begin{summary}[Quick Reference: The Circuit You're Capturing]
+This is the same 18-pin Arduino Uno R3 circuit from Lab 4-1 -- nothing new to
+design, only to re-express as a schematic and land it on the Uno's real shield
+headers instead of loose jumper wires.
+\begin{center}
+\begin{tabular}{@{}p{1.7cm}p{1.5cm}p{2.0cm}p{2.9cm}p{4.3cm}@{}}
+\toprule
+\textbf{Port bits} & \textbf{Uno pins} & \textbf{Direction} & \textbf{Shield header} & \textbf{Function} \\
+\midrule
+\texttt{PB0-PB3} & D8-D11 & Input, pull-up & Digital (8-13) & \texttt{SW1-SW4} push buttons \\
+\texttt{PB4}, \texttt{PB5} & D12, D13 & Output & Digital (8-13) & \texttt{DIG1}, \texttt{DIG2} digit-select transistor bases \\
+\texttt{PC0-PC5} & A0-A5 & Output & Analog In & Segments \texttt{a,b,c,d,e,f} (shared by both digits) \\
+\texttt{PD2} & D2 & Output & Digital (0-7) & Segment \texttt{g} (shared by both digits) \\
+\texttt{PD3-PD7} & D3-D7 & Output & Digital (0-7) & \texttt{LED1-LED5}, individually addressable \\
+-- & GND & -- & Power \emph{or} Digital (8-13) & Common ground return \\
+\bottomrule
+\end{tabular}
+\end{center}
+Every signal lands on one of the Uno's \textbf{four standard shield header
+strips} -- see the box below before you place a single connector symbol.
+\end{summary}
+
+\begin{summary}[Quick Reference: Arduino Uno Shield Header Layout]
+A real Uno shield does not use generic pin headers wherever convenient -- it
+must reproduce the Uno's own four female header strips, in their exact
+positions, so the board stacks and every pin lines up:
+\begin{center}
+\begin{tabular}{@{}p{3.0cm}p{1.3cm}p{9.6cm}@{}}
+\toprule
+\textbf{Header} & \textbf{Pins} & \textbf{Signals (in order)} \\
+\midrule
+Digital (8-13) & 8 & \texttt{AREF, GND, D13, D12, D11, D10, D9, D8} \\
+Digital (0-7) & 8 & \texttt{D7, D6, D5, D4, D3, D2, D1(TX), D0(RX)} \\
+Power & 7 & \texttt{IOREF, RESET, 3V3, 5V, GND, GND, VIN} \\
+Analog In & 6 & \texttt{A0, A1, A2, A3, A4, A5} \\
+\bottomrule
+\end{tabular}
+\end{center}
+The two \textbf{Digital} headers run along one long edge of the board (top, in
+the usual orientation); \textbf{Power} and \textbf{Analog In} run along the
+\emph{opposite} edge (bottom). We only wire the pins this circuit actually
+uses (\texttt{D2-D13}, \texttt{A0-A5}, one \texttt{GND}) -- \texttt{D0}/\texttt{D1}
+(USB-serial), \texttt{AREF}, and the 3V3/5V/VIN/RESET/IOREF power pins stay
+unconnected on this board, exactly as they were left unused in Lab 4-1.
+
+\textbf{The famous gap:} the horizontal spacing between the last pin of the
+Digital~(0-7) header and the first pin of the Digital~(8-13) header is
+\emph{not} a clean multiple of the 0.1~in grid every other pin sits on -- an
+original Arduino Uno design quirk that every compatible shield must reproduce
+\emph{exactly}. Do not eyeball or round this gap: copy the position from an
+authoritative Arduino Uno shield footprint/outline (KiCad's bundled Arduino
+connector library, if present, or Arduino's own published Uno R3 dimensional
+drawing) rather than placing a plain 0.1~in header and hoping it lines up.
+\end{summary}
+
+\section*{Bill of Materials}
+\begin{center}
+\begin{tabular}{@{}p{1.4cm}p{6.3cm}p{7.5cm}@{}}
+\toprule
+\textbf{Qty} & \textbf{Part} & \textbf{Notes} \\
+\midrule
+4 & Tactile push button (6~mm THT) & \texttt{SW1-SW4}, no external resistor \\
+5 & LED, 3~mm or 5~mm & \texttt{LED1-LED5} \\
+5 & Resistor, 330~$\Omega$ & Current limiting for \texttt{LED1-LED5} \\
+2 & 7-segment display, \textbf{common cathode} & \texttt{DIGIT1} (tens), \texttt{DIGIT2} (units) \\
+7 & Resistor, 330~$\Omega$ & Shared segment resistors \texttt{a-g} \\
+2 & NPN transistor (e.g.\ 2N3904) & Digit-select low-side switches, \texttt{Q1}/\texttt{Q2} \\
+2 & Resistor, 1~k$\Omega$ & Transistor base resistors \\
+4 & Female header, 2.54~mm (8, 8, 7, and 6 positions) & The Uno's standard shield
+header set (Digital 8-13, Digital 0-7, Power, Analog In) -- \emph{not} generic
+pin headers; these must stack directly onto the Uno's own male header pins \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection*{KiCad Workflow Overview}
+\begin{enumerate}[leftmargin=*,nosep]
+  \item \textbf{Schematic capture} (\texttt{Schematic Editor}): place a symbol for
+        every part in the bill of materials above, wire them exactly as you wired
+        the Lab 4-1 breadboard, and label every port-bit net that connects back to
+        the Uno.
+  \item \textbf{Electrical Rules Check (ERC)}: catch unconnected pins, conflicting
+        outputs, and missing power symbols \emph{before} laying out copper.
+  \item \textbf{Footprint assignment}: attach a physical PCB footprint (THT pad
+        pattern) to every symbol.
+  \item \textbf{PCB layout} (\texttt{PCB Editor}): import the netlist, place
+        components, reproduce the Uno's exact shield outline and header
+        positions (not a board outline of your own choosing), and route every
+        trace.
+  \item \textbf{Design Rules Check (DRC)}: catch clearance violations, unrouted
+        nets, and footprint overlaps.
+  \item \textbf{Manufacturing output}: plot Gerber files (one per copper/silkscreen/
+        mask layer) and a drill file -- the format every fab house, including
+        PCBWay, accepts.
+\end{enumerate}
+
+\begin{summary}[Quick Reference: Symbols You Need]
+\begin{center}
+\begin{tabular}{@{}p{4.5cm}p{9.7cm}@{}}
+\toprule
+\textbf{KiCad symbol} & \textbf{Represents} \\
+\midrule
+\texttt{Device:R} & Every 330~$\Omega$ and 1~k$\Omega$ resistor \\
+\texttt{Device:LED} & \texttt{LED1-LED5} \\
+\texttt{Device:Q\_NPN\_BCE} & Digit-select transistors Q1, Q2 \\
+\texttt{Switch:SW\_Push} & \texttt{SW1-SW4} \\
+A 7-segment, common-cathode display symbol (search ``7SEG'' in the library
+browser) & \texttt{DIGIT1}, \texttt{DIGIT2} (confirm \emph{common cathode}, not
+anode, before placing) \\
+An Arduino Uno shield connector footprint/symbol (search ``Arduino'' or
+``Shield''; use KiCad's bundled Arduino connector library if your install has
+one) & The four female header strips from the Shield Header Layout box above --
+\emph{do not} substitute generic \texttt{Connector\_Generic} pin headers, since
+the shield's mechanical fit depends on the real footprint, not just matching
+hole spacing by eye \\
+\texttt{power:GND}, \texttt{power:+5V} & Power symbols -- required by ERC on every
+sheet that uses power nets \\
+\bottomrule
+\end{tabular}
+\end{center}
+This board is a \emph{peripheral shield}, not a second computer: it carries no
+microcontroller, crystal, or reset circuit of its own -- the Uno you already have
+supplies all of that, exactly as it did in Lab 4-1.
+\end{summary}
+
+\section*{Example Output (Illustrative Draft)}
+Figures~\ref{fig:pcb2d} and~\ref{fig:pcb3d} show, roughly, the \emph{kind} of board
+you are aiming for -- a rough draft sketch, \emph{not} a prescriptive layout to
+copy. Your own component placement, routing, and even board outline will (and
+should) look different once you complete the exercises below; every real design
+decision -- where each part goes, how each trace is routed -- is yours to make.
+
+\begin{figure}[h!]
+\centering
+\begin{tikzpicture}[scale=0.72, every node/.style={font=\scriptsize}]
+
+% board outline
+\fill[pcbgreen] (0,0) rectangle (12,8);
+\draw[pcbgreendark, thick] (0,0) rectangle (12,8);
+
+% mounting holes (corners)
+\foreach \x/\y in {0.4/0.4, 11.6/0.4, 0.4/7.6, 11.6/7.6} {
+  \fill[pad] (\x,\y) circle (0.12);
+  \draw[black] (\x,\y) circle (0.12);
+}
+
+% ---- TOP edge: the two DIGITAL headers (with the famous gap) ----
+\foreach \i in {0,...,7} {
+  \fill[pad] (0.8+\i*0.4,7.4) circle (0.08);
+}
+\node[silk] at (2.2,7.05) {\ttfamily Digital (8-13)};
+\foreach \i in {0,...,7} {
+  \fill[pad] (4.6+\i*0.4,7.4) circle (0.08);
+}
+\node[silk] at (6.0,7.05) {\ttfamily Digital (0-7)};
+
+% ---- BOTTOM edge: POWER and ANALOG IN ----
+\foreach \i in {0,...,6} {
+  \fill[pad] (0.8+\i*0.4,0.6) circle (0.08);
+}
+\node[silk] at (2.0,0.25) {\ttfamily POWER};
+\foreach \i in {0,...,5} {
+  \fill[pad] (4.4+\i*0.45,0.6) circle (0.08);
+}
+\node[silk] at (5.5,0.25) {\ttfamily ANALOG IN};
+
+% ---- 7-segment displays ----
+\foreach \x in {1.5, 5} {
+  \draw[silk, thick] (\x,4.6) rectangle (\x+3,6.8);
+  \node[silk] at (\x+1.5,6.7) {\scriptsize DIGIT};
+  \foreach \i in {0,...,4} {
+    \fill[pad] (\x+0.3+\i*0.6,4.6) circle (0.06);
+  }
+}
+
+% ---- push buttons ----
+\foreach \i/\name in {0/SW1,1/SW2,2/SW3,3/SW4} {
+  \draw[silk, thick] (1+\i*1.6,2.2) rectangle (2+\i*1.6,3.2);
+  \node[silk] at (1.5+\i*1.6,3.35) {\name};
+}
+
+% ---- transistors ----
+\foreach \i/\name in {0/Q1,1/Q2} {
+  \draw[silk, thick] (9.7+\i*0.9,5.0) circle (0.3);
+  \node[silk] at (9.7+\i*0.9,5.5) {\name};
+}
+
+% ---- LEDs (with resistor footprints above, on the way to the top header) ----
+\foreach \i in {0,...,4} {
+  \draw[silk, thick] (8.6+\i*0.72,2.2) circle (0.25);
+  \draw[silk] (8.6+\i*0.72-0.15,2.65) rectangle (8.6+\i*0.72+0.15,2.95);
+}
+\node[silk] at (9.66,1.75) {\scriptsize LED1-LED5};
+
+% ---- resistor footprints for the shared segment bus ----
+\foreach \i in {0,...,3} {
+  \draw[silk] (1.35+\i*0.55,3.7) rectangle (1.65+\i*0.55,4.0);
+}
+
+% ---- illustrative copper traces (orthogonal routing; representative only) ----
+% segment bus: digit1 pins -> spine -> down to Analog In header
+\foreach \i in {0,...,3} {
+  \draw[copper, line width=0.7pt] (1.5+\i*0.55+0.3,4.6) -- (1.5+\i*0.55+0.3,4.15);
+}
+\draw[copper, line width=0.9pt] (1.8,3.85) -- (6.9,3.85);
+\draw[copper, line width=0.7pt] (6.9,3.85) -- (6.9,1.4) -- (6.65,0.9);
+
+% SW1 -> Digital(8-13) header, routed left of DIGIT1
+\draw[copper, line width=0.7pt] (1.4,3.2) -- (1.4,4.0) -- (0.8,4.0) -- (0.8,7.4);
+
+% LED1 -> Digital(0-7) header, routed right of DIGIT2
+\draw[copper, line width=0.7pt] (8.6,2.45) -- (8.6,2.65);
+\draw[copper, line width=0.7pt] (8.6,2.95) -- (8.6,7.4) -- (7.4,7.4);
+
+\end{tikzpicture}
+\caption{Illustrative top-copper/silkscreen preview -- \emph{not to scale, not a
+routing solution to copy}. The two \texttt{Digital} headers run along the top edge
+(note the gap -- see the Shield Header Layout box above), \texttt{POWER} and
+\texttt{ANALOG IN} along the bottom edge. Gray pads are the Uno's own shield
+header pins; the thin gold lines are illustrative traces only.}
+\label{fig:pcb2d}
+\end{figure}
+
+\begin{figure}[h!]
+\centering
+\begin{tikzpicture}[x={(0.72cm,0cm)}, y={(0.36cm,0.24cm)}, z={(0cm,0.72cm)}, font=\scriptsize]
+
+% board slab
+\drawbox{0}{0}{0}{12}{8}{0.35}{pcbgreen}{pcbgreendark}
+
+% top digital headers (with the famous gap) -- extended past the displays'
+% footprint on purpose so a sliver stays visible instead of fully hidden
+\drawbox{0.4}{7.2}{0.35}{3.6}{0.4}{0.5}{compblack1}{compblack2}
+\drawbox{4.5}{7.2}{0.35}{4.0}{0.4}{0.5}{compblack1}{compblack2}
+
+% bottom power + analog-in headers
+\drawbox{0.7}{0.45}{0.35}{2.6}{0.35}{0.5}{compblack1}{compblack2}
+\drawbox{4.3}{0.45}{0.35}{2.5}{0.35}{0.5}{compblack1}{compblack2}
+
+% 7-segment displays
+\drawbox{1.5}{4.6}{0.35}{3}{2.2}{0.9}{compblack1}{compblack2}
+\drawbox{5}{4.6}{0.35}{3}{2.2}{0.9}{compblack1}{compblack2}
+\node at (3,5.7,1.3) {\textcolor{white}{\scriptsize DIGIT1}};
+\node at (6.5,5.7,1.3) {\textcolor{white}{\scriptsize DIGIT2}};
+
+% push buttons
+\foreach \i in {0,1,2,3} {
+  \drawbox{1+\i*1.6}{2.2}{0.35}{1}{1}{0.55}{compgray1}{compgray2}
+}
+
+% transistors
+\drawbox{9.4}{4.8}{0.35}{0.6}{0.4}{0.5}{compgray1}{compgray2}
+\drawbox{10.3}{4.8}{0.35}{0.6}{0.4}{0.5}{compgray1}{compgray2}
+
+% LEDs
+\foreach \i/\col in {0/red,1/red,2/green,3/yellow,4/red} {
+  \drawbox{8.4+\i*0.72}{2.0}{0.35}{0.4}{0.4}{0.55}{\col}{\col!60!black}
+}
+
+\end{tikzpicture}
+\caption{Illustrative 3D-rendered preview of the same draft layout -- a simplified
+stand-in for what KiCad's own 3D Viewer will show once your footprints have 3D
+models assigned. The two digital headers run behind the tall displays from this
+angle (only their edges peek out) -- the 2D preview above is the reliable
+reference for header positions. Component colors and proportions are
+approximate.}
+\label{fig:pcb3d}
+\end{figure}
+
+\section*{Quick Experiments (Try It)}
+
+\begin{tryit}{One symbol, one footprint, one look}
+Before wiring the whole schematic, place a single \texttt{Device:R} symbol, open its
+\textbf{Footprint} field, and assign a THT footprint (e.g.\
+\texttt{Resistor\_THT:R\_Axial\_DIN0207\_L6.3mm\_D2.5mm\_P10.16mm\_Horizontal}). Switch
+to the PCB Editor's footprint preview and confirm you can see the two-pad footprint
+before you commit to using it across all 12 resistors in your design.
+\end{tryit}
+
+\section*{In-Lab Exercises (target: 3 hours)}
+
+\begin{labexercise}{Schematic capture \hfill {\small \itshape (50 min)}}
+Create a new KiCad project. Place and wire every symbol from the Quick Reference
+table above, reproducing your Lab 4-1 breadboard circuit net-for-net: buttons to
+their Digital(8-13) header pins with no external resistor, LEDs through their
+resistors to their Digital(0-7) header pins, the shared segment resistor bus
+feeding both 7-segment symbols in parallel and continuing to the Analog In header,
+and each digit-select transistor's collector/base/emitter wired as in Lab 4-1.
+Annotate all references (so every part gets a unique designator like \texttt{R1},
+\texttt{Q2}) and run ERC until it reports zero errors.
+\end{labexercise}
+
+\begin{labexercise}{Footprints \hfill {\small \itshape (30 min)}}
+Assign a footprint to every symbol: THT axial resistor footprints for all 12
+resistors, a 3~mm or 5~mm THT LED footprint (matching your real LEDs) for
+\texttt{LED1-LED5}, a \texttt{TO-92} footprint for Q1/Q2, a THT tactile-switch
+footprint for \texttt{SW1-SW4}, the matching 7-segment display footprint (check your
+display's datasheet for pin pitch and confirm it against your physical part), and
+the four Arduino shield header footprints (Digital 8-13, Digital 0-7, Power, Analog
+In) -- \emph{not} generic pin headers. Re-run ERC -- footprint assignment does not
+change connectivity, so it should still be clean.
+\end{labexercise}
+
+\begin{labexercise}{PCB layout and routing \hfill {\small \itshape (60 min)}}
+Update the PCB from the schematic (imports the netlist as ratsnest lines). Unlike a
+freestanding board, you do \emph{not} get to choose your own outline or header
+positions here: reproduce the Uno's own board outline and the exact positions of
+all four shield headers (roughly 68.6~mm~$\times$~53.3~mm / 2.7~in~$\times$~2.1~in
+overall -- copy the real dimensions from an authoritative Arduino shield
+outline/footprint rather than measuring off a photo). Place the remaining
+components (displays, buttons, LEDs, transistors) wherever fits well between the
+fixed headers -- displays and their digit labels easy to read from one edge,
+buttons reachable from the front. Route every trace (a 0.3-0.4~mm signal trace
+width is a reasonable default for this current level) until the ratsnest is empty,
+then run DRC until it reports zero errors.
+\begin{itemize}[nosep,leftmargin=*]
+  \item \textbf{Trace/predict:} before routing, look at your ratsnest and predict
+        which net will be hardest to route without crossing others -- is it the
+        shared segment bus (7 nets fanning out to 14 physical pads across 2
+        displays) or something else? Route it first and see if your prediction held.
+  \item Confirm your Digital(0-7)/Digital(8-13) header gap matches your reference
+        outline \emph{exactly} -- do not round it to the nearest 0.1~in grid
+        point (see the Shield Header Layout box's ``famous gap'' warning).
+\end{itemize}
+\end{labexercise}
+
+\begin{labexercise}{Manufacturing outputs \hfill {\small \itshape (25 min)}}
+Plot Gerber files for every copper, mask, and silkscreen layer your board uses, plus
+a drill file (Excellon format). Open the resulting Gerbers in KiCad's Gerber Viewer
+(or the PCB Editor's 3D Viewer) and visually confirm: every trace you expect to see
+is present, the board outline is a single closed shape, and no copper overlaps the
+board edge. Zip the Gerber and drill files together -- this zip is what a fab house
+expects as a single upload.
+\end{labexercise}
+
+\subsection*{Optional: Ordering from PCBWay}
+Submitting your board for real fabrication is entirely optional and at your own
+expense (a handful of small boards typically costs a few dollars, plus shipping) --
+it is not required to complete this lab.
+\begin{enumerate}[leftmargin=*,nosep]
+  \item Create an account at PCBWay and start a new PCB quote.
+  \item Upload the Gerber/drill zip from Exercise 4. PCBWay's online viewer will
+        render your board -- compare it against your own KiCad 3D view before
+        ordering; a mismatch usually means a missing or mis-plotted layer.
+  \item Default specs (2 layers, 1.6~mm thickness, HASL surface finish, standard
+        solder mask color) are more than adequate for this design -- there is no
+        need to change anything unless you have a specific reason to.
+  \item Double-check the quantity and shipping method before paying; lead time
+        (fabrication plus shipping) is typically 1-2 weeks for standard service.
+\end{enumerate}
+If you choose not to order, submit your KiCad project files (schematic, PCB layout,
+and the Gerber/drill zip) as your deliverable instead.
+
+\begin{aicollab}
+\textbf{Try these prompts with an AI tool:}
+\begin{itemize}[leftmargin=*,nosep]
+  \item ``What KiCad symbol and footprint should I use for a common-cathode
+        7-segment display, and how do I confirm the pinout matches my physical
+        part before I order a PCB?''
+  \item ``What's a reasonable trace width and clearance for a hobbyist 2-layer PCB
+        carrying under 100~mA per net, and why doesn't it need to be wider?''
+  \item ``What's the difference between ERC and DRC in KiCad, and why can a design
+        pass one but fail the other?''
+  \item ``What are the exact dimensions and header positions of an Arduino Uno R3
+        shield, including the gap between the two digital headers? Where does that
+        information come from originally?''
+\end{itemize}
+
+\medskip\textbf{Critical check -- verify, don't just accept:}
+If an AI tool gives you a footprint, symbol, or a shield dimension, do not just
+place or trust it -- open the footprint preview and measure it against your
+physical part's datasheet pin pitch (or against an authoritative Arduino
+dimensional drawing, for the shield outline itself) before you route a single
+trace. Two 7-segment displays that look identical in a library browser can use
+different pin spacing, and a plausible-sounding shield dimension repeated
+confidently across many sources is not the same as a verified one.
+
+\medskip\textbf{Know the limit:}
+AI tools will confidently give you a ``safe'' trace width or clearance number
+without asking what copper weight (1~oz vs.\ 2~oz) or current your specific net
+actually carries. Treat any such number as a starting point to verify against your
+fab's own capability table (e.g.\ PCBWay's standard 1~oz/6~mil specification), not
+as a final answer.
+\end{aicollab}
+
+\takehomebanner
+
+\begin{trace}[Manufacturability at a tighter tolerance]
+A different student's layout uses 0.15~mm (6~mil) trace width and 0.15~mm (6~mil)
+clearance throughout, matching PCBWay's advertised \emph{standard} minimum. Another
+student's layout uses 0.5~mm (20~mil) trace width and clearance throughout. Which
+design is more likely to need an \emph{advanced} (costlier) fabrication tier rather
+than PCBWay's standard tier, and why does clearance -- not just trace width -- matter
+to that answer?
+\end{trace}
+
+\begin{bug}[Rounding the famous gap]
+A student, in a hurry, placed the Digital(0-7) and Digital(8-13) headers using two
+plain 8-pin, 0.1~in-pitch connectors, and simply butted them together with a clean
+0.2~in gap between the last pin of one and the first pin of the other -- reasoning
+that ``it's a header, it's all 0.1~in spacing.'' DRC reports zero errors, and every
+schematic net is correctly connected to the correct physical pad. Explain why DRC
+cannot catch this mistake, and predict exactly what happens when the student tries
+to stack the fabricated shield onto a real Arduino Uno.
+\end{bug}
+
+\begin{writecode}[Hand-write a netlist]
+On paper, without opening KiCad, write out the netlist for the \texttt{DIG1}
+digit-select sub-circuit (Q1, its base resistor, and everything each of Q1's three
+terminals connects to) in the simple text format \texttt{net\_name: pin, pin, pin}
+-- one line per net. You should end up with exactly as many nets as there are
+electrically distinct connection points in that sub-circuit; state how many that is
+before you start counting pins.
+\end{writecode}
+
+\begin{drawex}{Sketch your board before opening KiCad}
+On paper, sketch your shield's component placement -- both displays, all four
+buttons, all five LEDs, and both transistors -- \emph{before} you open the PCB
+Editor. Unlike Exercise 3's board outline and header positions (which are fixed by
+the Uno's own dimensions, not yours to choose), component placement is still your
+decision: draw the four shield headers at their real relative positions first (as
+a fixed frame you must design around), then sketch where everything else goes
+inside that frame. Then build your actual layout in Exercise 3 and compare: did
+your paper placement survive contact with real routing constraints, or did
+something need to move? What forced the change?
+\end{drawex}
+
+\section*{Reflection}
+
+In one short paragraph, compare this lab's PCB to Lab 4-1's breadboard. They
+implement the \emph{exact same} schematic -- same parts, same nets, same firmware.
+What changed between them, and what stayed identical? Consider specifically: which
+mistakes (a loose jumper wire, a swapped segment pin) are trivial to fix on a
+breadboard but expensive or impossible to fix once a PCB is fabricated -- and what
+does that imply about how much verification (ERC, DRC, comparing footprints against
+real datasheets) is worth doing \emph{before} sending Gerbers to a fab house, versus
+how much verification Lab 4-1's breadboard build needed before you trusted it?
+
+\newpage
+\section*{Appendix A: KiCad and PCBWay Troubleshooting}
+
+\begin{center}
+\begin{tabular}{@{}p{5.4cm}p{6.8cm}@{}}
+\toprule
+\textbf{Message / symptom} & \textbf{Likely cause and fix} \\
+\midrule
+ERC reports ``Pin not connected'' on a symbol you know is wired &
+A wire crossing another wire without a junction dot is \emph{not} electrically
+connected in KiCad -- add an explicit junction, or move the wire so it meets at a
+clean T or corner. \\
+\addlinespace
+ERC reports ``conflicting power pin'' on your shield header nets &
+The shield header pins need a net label or hierarchical label matching each pin
+name (e.g.\ \texttt{D8}), not a floating power symbol -- power symbols are only for
+true \texttt{+5V}/\texttt{GND} rails. \\
+\addlinespace
+Footprint preview shows the wrong pad spacing versus your physical part &
+You picked a footprint by name similarity, not by measuring your part. Measure pin
+pitch with calipers (or read the datasheet) and re-select a footprint that matches
+exactly -- this is the single most common reason a bring-up board doesn't fit its
+parts. A 3~mm LED footprint on a board populated with real 5~mm LEDs is a classic
+example: ERC never catches it (footprints carry no electrical meaning to ERC),
+and the part simply won't seat in undersized pads once the board is populated. \\
+\addlinespace
+DRC reports ``clearance violation'' between two traces that look far apart on
+screen &
+Zoom in -- it is almost always a via annular ring or a trace corner, not the visible
+trace body. Increase zoom before assuming DRC is wrong. \\
+\addlinespace
+DRC reports unrouted nets after you believe everything is routed &
+Check for a net with only \emph{one} pad placed (e.g.\ a symbol you forgot to update
+footprints for) -- KiCad cannot route a net that only touches one physical pad. \\
+\addlinespace
+Shield doesn't sit flush, or some pins don't line up, once populated &
+DRC and ERC only check \emph{your} design's internal consistency -- neither one
+knows what a real Uno looks like. This almost always means the board outline or
+header positions were measured/rounded by eye instead of copied exactly from an
+authoritative Arduino Uno shield footprint or dimensional drawing (see the
+``famous gap'' warning in the Shield Header Layout box). \\
+\addlinespace
+PCBWay's online Gerber viewer shows a blank or missing layer &
+Re-check your Plot dialog's layer selection before exporting -- a common miss is
+forgetting to include both silkscreen layers or the board-outline (\texttt{Edge.Cuts})
+layer, which the fab needs to know your board's physical shape. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\end{document}

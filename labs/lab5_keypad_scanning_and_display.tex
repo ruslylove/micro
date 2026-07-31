@@ -1,0 +1,299 @@
+\documentclass[11pt]{article}
+\newcommand{\LabNumber}{5}
+\newcommand{\LabTitle}{Keypad Scanning and Display}
+\newcommand{\LabTopic}{Multiplexed keypad input scanning on the Arduino Uno R3, decoded and shown on a single 7-segment digit in AVR assembly -- the input-side counterpart to Lab 4's multiplexed display output}
+\newcommand{\LabDuration}{3 hours (in-lab)}
+\input{common.tex}
+\usepackage{circuitikz}
+
+\begin{document}
+\labheader
+
+\section*{Objectives}
+\begin{itemize}[leftmargin=*,nosep]
+  \item Understand \textbf{matrix keypad scanning} as multiplexed \emph{input} --
+        the mirror image of Lab 4's multiplexed \emph{output} to a 2-digit display.
+  \item Wire a 4x4 matrix keypad and a single 7-segment digit to the Arduino Uno R3.
+  \item Write AVR assembly that drives one row \textbf{LOW} at a time, polls all
+        four columns (internal pull-ups, idle \textbf{HIGH}), and decodes the
+        resulting (row, column) pair into a key value.
+  \item Debounce keypresses and display the result -- reusing Lab 4-1's
+        \texttt{DIGIT\_TO\_SEG} subroutine \emph{unchanged}.
+\end{itemize}
+
+\begin{summary}[Quick Reference: Pin Assignment]
+\begin{center}
+\begin{tabular}{@{}p{2.1cm}p{1.8cm}p{2.6cm}p{7.4cm}@{}}
+\toprule
+\textbf{Port bits} & \textbf{Uno pins} & \textbf{Direction} & \textbf{Function} \\
+\midrule
+\texttt{PB0-PB3} & D8-D11 & Output & Keypad rows \texttt{R1-R4} (driven one at a
+time, active \textbf{low}) \\
+\texttt{PD2-PD5} & D2-D5 & Input, pull-up & Keypad columns \texttt{C1-C4} (idle
+\textbf{high}; pulled \textbf{low} through a pressed key when its row is driven low) \\
+\texttt{PC0-PC5} & A0-A5 & Output & Segments \texttt{a,b,c,d,e,f} \\
+\texttt{PD6} & D6 & Output & Segment \texttt{g} \\
+\bottomrule
+\end{tabular}
+\end{center}
+This is the \emph{same} segment bit order and hex table as Lab 4-1 -- only segment
+\texttt{g}'s physical pin moved, from \texttt{PD2} to \texttt{PD6}, because
+\texttt{PD2-PD5} are now the keypad's column inputs. There is no digit-select
+transistor this time: a single digit's common cathode goes straight to \textbf{GND}.
+\end{summary}
+
+\begin{summary}[Quick Reference: How Matrix Scanning Works]
+A 4x4 keypad packs 16 keys into just 8 wires -- 4 rows + 4 columns -- because each
+key does nothing but bridge \emph{one} row wire to \emph{one} column wire when
+pressed; there is no other connection inside the keypad. Driving all 4 rows at once
+would make every key on a pressed column look identical, so scanning removes the
+ambiguity: drive exactly \emph{one} row \textbf{LOW} (the other three stay
+\textbf{HIGH}), read all 4 columns, and only trust what you read while that one row
+is the low one. Cycle through all 4 rows, fast enough that a keypress during any
+row's turn gets caught.
+\begin{center}
+\begin{tabular}{@{}c|cccc@{}}
+\toprule
+ & \textbf{C1} & \textbf{C2} & \textbf{C3} & \textbf{C4} \\
+\midrule
+\textbf{R1} & 1 & 2 & 3 & A \\
+\textbf{R2} & 4 & 5 & 6 & B \\
+\textbf{R3} & 7 & 8 & 9 & C \\
+\textbf{R4} & * & 0 & \# & D \\
+\bottomrule
+\end{tabular}
+\end{center}
+This is the standard layout for most inexpensive 4x4 membrane keypads --
+\textbf{confirm it against your physical keypad's printed labels} before trusting
+any decoded output; wiring order varies between manufacturers. Only \texttt{0-9}
+have a segment code from Lab 4-1's table; for \texttt{A,B,C,D,*,\#}, just display a
+dash (segment \texttt{g} only) as a ``not a digit'' indicator -- no new segment
+codes needed.
+\end{summary}
+
+\begin{summary}[Quick Reference: Your Individual Target]
+As in Labs 3 and 4-1, derive your personal target from your student ID:
+\[
+D = \text{sum of every digit in your student ID}, \qquad
+t_{\text{debounce}} = 15\text{ ms} + (D \bmod 10) \times 1\text{ ms}
+\]
+\textbf{Worked example} (a made-up ID, do not reuse): ID \texttt{1029384756123}
+$\to D = 51$. Then $t_{\text{debounce}} = 15 + (51 \bmod 10) \times 1 = 15 + 1 =
+16$~ms.
+\end{summary}
+
+\section*{Bill of Materials}
+\begin{center}
+\begin{tabular}{@{}p{1.4cm}p{6.3cm}p{7.5cm}@{}}
+\toprule
+\textbf{Qty} & \textbf{Part} & \textbf{Notes} \\
+\midrule
+1 & Arduino Uno R3 (from Lab 3/4) & Supplies power, ground, and all signal pins \\
+1 & 4x4 matrix keypad module (8-pin) & \texttt{R1-R4}, \texttt{C1-C4} \\
+1 & 7-segment display, \textbf{common cathode} & Single digit -- no transistor
+needed \\
+7 & Resistor, 330~$\Omega$ & Segment current limiting, \texttt{a-g} \\
+1 & Breadboard + jumper wires & \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section*{Building the Circuit}
+\begin{enumerate}[leftmargin=*,nosep]
+  \item \textbf{Rows.} Wire keypad \texttt{R1-R4} to \texttt{PB0-PB3} (Uno D8-D11).
+        These are \textbf{outputs} -- the MCU actively drives them, one at a time.
+  \item \textbf{Columns.} Wire keypad \texttt{C1-C4} to \texttt{PD2-PD5} (Uno
+        D2-D5). These are \textbf{inputs} with the AVR's internal pull-up enabled
+        -- no external resistor, exactly like Lab 4-1's buttons.
+  \item \textbf{Display.} Wire segments \texttt{a-f} through 330~$\Omega$ resistors
+        to \texttt{PC0-PC5} (A0-A5), segment \texttt{g} through a 330~$\Omega$
+        resistor to \texttt{PD6} (D6), and the common cathode straight to
+        \textbf{GND}. One digit, always lit when driven -- no multiplexed refresh
+        loop this time.
+\end{enumerate}
+
+\begin{figure}[h!]
+\centering
+\begin{circuitikz}[
+  american voltages,
+  scale=0.85, transform shape,
+  font=\scriptsize
+]
+
+% ---------------- Keypad box ----------------
+\node[draw, fill=accentlight, minimum width=3cm, minimum height=3cm, align=center]
+     at (3,5) (kp) {\textbf{4x4 KEYPAD}};
+
+% Row pins (left edge) <- PB0-PB3
+\draw (0,6.0) node[left]{\texttt{PB0} (D8)}  -- (1.5,6.0) node[pos=0.85,above]{R1};
+\draw (0,5.5) node[left]{\texttt{PB1} (D9)}  -- (1.5,5.5) node[pos=0.85,above]{R2};
+\draw (0,5.0) node[left]{\texttt{PB2} (D10)} -- (1.5,5.0) node[pos=0.85,above]{R3};
+\draw (0,4.5) node[left]{\texttt{PB3} (D11)} -- (1.5,4.5) node[pos=0.85,above]{R4};
+
+% Column pins (right edge) -> PD2-PD5
+\draw (4.5,6.0) -- (6,6.0) node[right]{\texttt{PD2} (D2)};
+\node[above] at (4.725,6.0) {C1};
+\draw (4.5,5.5) -- (6,5.5) node[right]{\texttt{PD3} (D3)};
+\node[above] at (4.725,5.5) {C2};
+\draw (4.5,5.0) -- (6,5.0) node[right]{\texttt{PD4} (D4)};
+\node[above] at (4.725,5.0) {C3};
+\draw (4.5,4.5) -- (6,4.5) node[right]{\texttt{PD5} (D5)};
+\node[above] at (4.725,4.5) {C4};
+
+% ---------------- Segment section ----------------
+\node[draw, fill=accentlight, minimum width=3cm, minimum height=1.6cm, align=center]
+     at (3,0.5) (dig) {\textbf{DIGIT}\\common cathode};
+
+\node[align=center] at (3,3.4) {\scriptsize \texttt{PC0-PC5} (A0-A5), \texttt{PD6} (D6)};
+
+\foreach \i/\lbl in {0/a, 1/b, 2/c, 3/d, 4/e, 5/f, 6/g} {
+  \draw (1.65+\i*0.47,3.0) to[R] (1.65+\i*0.47,1.3);
+  \node[below right] at (1.65+\i*0.47,1.35) {\tiny \lbl};
+}
+
+\draw (dig.south) -- ++(0,-0.8) node[ground]{};
+
+\end{circuitikz}
+\caption{Keypad and single-digit display wiring. Each key merely bridges its row
+line to its column line when pressed -- there is no component inside the keypad
+beyond that mechanical bridge. Segment resistors shown individually since, unlike
+Lab 4-1, there is only one digit to drive (no shared bus, no multiplexing).}
+\end{figure}
+
+\section*{Quick Experiments (Try It)}
+
+\begin{tryit}{Rows and columns, by hand}
+Before writing any scanning code, drive \texttt{PB0} (Row 1) \textbf{LOW} and
+\texttt{PB1-PB3} \textbf{HIGH}, with columns configured as instructed above. Touch
+a jumper wire between the \texttt{R1} and \texttt{C1} pins on the breadboard
+(simulating pressing the ``1'' key) and confirm \texttt{IN R17,PIND} shows bit~2
+(\texttt{PD2}, column 1) go \textbf{LOW} only while the wire bridges those two
+specific pins. This confirms your wiring before any scanning loop exists.
+\end{tryit}
+
+\begin{tryit}{One row, no full scan}
+Write a short loop that drives \emph{only} \texttt{R1} low (\texttt{R2-R4} stay
+high) and polls \texttt{C1-C4}. Confirm that keys \texttt{1, 2, 3, A} register
+while keys on other rows (e.g.\ \texttt{5} or \texttt{9}) do \emph{not} -- even
+though you have not yet written code to scan those other rows. This is your
+checkpoint that a single row's scan works in isolation, the same incremental
+approach Lab 4-1 used before combining two digits.
+\end{tryit}
+
+\section*{In-Lab Exercises (target: 3 hours)}
+
+\begin{labexercise}{Wire and verify the display alone \hfill {\small \itshape (30 min)}}
+Wire the display per the instructions above and re-run Lab 4-1's static-digit test
+(cycle 0-9, holding each briefly) \emph{completely unchanged} except for segment
+\texttt{g}'s pin (\texttt{PD2} $\to$ \texttt{PD6}). Confirm every digit 0-9 still
+renders correctly before wiring the keypad -- you are only relocating one pin, not
+redesigning the display logic.
+\end{labexercise}
+
+\begin{labexercise}{Single-row scan \hfill {\small \itshape (35 min)}}
+Repeat Try It 2 as a graded checkpoint: scan \texttt{R1} only, and light the
+Uno's on-board LED (\texttt{PB5}) -- or show it on the display as a placeholder --
+whenever any of \texttt{C1-C4} reads low. Confirm the LED responds \emph{only} to
+keys \texttt{1, 2, 3, A} and stays off for every other key on the pad.
+\end{labexercise}
+
+\begin{labexercise}{Full 4x4 scan and decode \hfill {\small \itshape (90 min)}}
+Extend Exercise 2 into a loop that cycles all four rows. On detecting a pressed
+key, decode its (row, column) pair into a key value using the Quick Reference
+map above, and display it: \texttt{0-9} through \texttt{DIGIT\_TO\_SEG} (reused
+unchanged from Lab 4-1), anything else as a dash (segment \texttt{g} only).
+\begin{itemize}[nosep,leftmargin=*]
+  \item Add a software debounce using your $t_{\text{debounce}}$ from the
+        ``Your Individual Target'' box: after first detecting a key, wait
+        $t_{\text{debounce}}$ and confirm the same key still reads pressed before
+        accepting it.
+  \item \textbf{Trace/predict first, then verify:} before running it, predict what
+        your program displays if two keys in \emph{different} rows and
+        \emph{different} columns are held down at the same time (e.g.\ \texttt{2}
+        and \texttt{8}). Then try it and compare -- does your prediction match,
+        and can you explain any mismatch from how the scan visits rows in order?
+\end{itemize}
+\end{labexercise}
+
+\begin{labexercise}{Hold last key until the next press \hfill {\small \itshape (25 min)}}
+Confirm your debounce value matches your calculated $t_{\text{debounce}}$ exactly,
+then extend Exercise 3 so the display holds the \emph{last} key pressed
+persistently -- not just for an instant -- until a new key is pressed and
+debounced. Describe in your notebook what the display does differently with
+versus without the debounce check from Exercise 3 (e.g.\ does the digit ever
+flicker or jump to a wrong value on a real keypress?).
+\end{labexercise}
+
+\begin{aicollab}
+\textbf{Try these prompts with an AI tool:}
+\begin{itemize}[leftmargin=*,nosep]
+  \item ``How do I scan a 4x4 matrix keypad in AVR assembly using internal
+        pull-up resistors on the columns?''
+  \item ``Why does a cheap matrix keypad without diodes suffer from `ghost'
+        keypresses when multiple keys are held down at once?''
+  \item ``What's a clean way in assembly to convert a (row, column) pair into a
+        single key value, given the keys aren't in a simple row-times-four-plus-
+        column order on every keypad?''
+\end{itemize}
+
+\medskip\textbf{Critical check -- verify, don't just accept:}
+Before trusting any decoded output, verify your \emph{physical} keypad's actual
+row/column/key layout against the Quick Reference table above -- don't assume an
+AI tool's row/column map matches your specific keypad, since wiring order varies
+between manufacturers even for keypads that look identical.
+
+\medskip\textbf{Know the limit:}
+AI tools will often hand you scanning code that quietly assumes a diode-protected
+keypad capable of full N-key rollover. Most classroom kits are diode-less, so
+holding multiple keys at once can produce a ``phantom'' key that was never
+pressed -- a real hardware limitation the AI's example code won't warn you about
+unless you ask specifically.
+\end{aicollab}
+
+\takehomebanner
+
+\begin{trace}[Decode a scan cycle by hand]
+A scan cycle drives \texttt{R1, R2, R3, R4} low in turn. While \texttt{R3} is low,
+\texttt{IN R17,PIND} reads \texttt{0b11110111} (bits 2-5 are columns \texttt{C1-C4}
+in that order, bit 2 = C1). Every other row's read shows all four column bits
+high. Using the Quick Reference key map, which key was pressed?
+\end{trace}
+
+\begin{bug}[Pull-ups left disabled]
+A student wired the columns to \texttt{PD2-PD5} exactly as instructed, correctly
+set \texttt{DDRD} bits 2-5 to \texttt{0} (input), but forgot to set the
+corresponding \texttt{PORTD} bits to \texttt{1} -- so the internal pull-ups never
+turn on. No key is being pressed. Predict what \texttt{IN R17,PIND} reads on
+these four bits, and explain why an unconnected (floating) digital input does not
+reliably read as either a clean \texttt{0} or a clean \texttt{1}.
+\end{bug}
+
+\begin{writecode}[Hand-write the decode chain]
+On paper, without a computer, simulator, or AI tool, write the \texttt{CPI}/\texttt{BRNE}
+comparison chain (or equivalent) that decodes a scan result for \emph{row R2 only}
+into its four key values (\texttt{4, 5, 6, B}) -- i.e.\ given that R2 was the row
+just driven low, and one column bit is known to read low, write the branches that
+turn ``column 1 is low'' into displaying \texttt{4}, ``column 2 is low'' into
+\texttt{5}, and so on.
+\end{writecode}
+
+\begin{drawex}{Draw the internal matrix}
+Draw the keypad's internal 4x4 grid from memory: 4 horizontal row lines, 4
+vertical column lines, and a switch symbol at each of the 16 crossings, labeled
+with its key. Then, for the key \texttt{6}, trace and highlight the exact current
+path from \texttt{PB1} (R2, driven low) through the pressed switch to \texttt{PD4}
+(C3, read low) -- and explain, from your drawing, why no \emph{other} column
+reads low while only the \texttt{6} key is held.
+\end{drawex}
+
+\section*{Reflection}
+
+In one short paragraph, compare this lab's keypad scanning to Lab 4's display
+multiplexing. Both drive one line at a time in a repeating cycle -- but one is
+scanning \emph{output} (lighting a digit) and the other is scanning \emph{input}
+(reading a key). What stayed structurally the same between them (the one-at-a-time
+timing, the loop-over-four-lines shape), and what's fundamentally different (which
+direction data flows, and why this lab's scan rate has no flicker-fusion deadline
+the way Lab 4's display refresh did)?
+
+\end{document}

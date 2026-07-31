@@ -1,0 +1,323 @@
+\documentclass[11pt]{article}
+\newcommand{\LabNumber}{6}
+\newcommand{\LabTitle}{Directives, Macros \& Checksum}
+\newcommand{\LabTopic}{Assembler directives, AVR addressing modes, user-defined macros, and EEPROM data memory, consolidated into an Intel-HEX-style checksum integrity check -- the last assembly lab before the midterm}
+\newcommand{\LabDuration}{3 hours (in-lab)}
+\input{common.tex}
+\usepackage{amssymb}
+
+\begin{document}
+\labheader
+
+\section*{Objectives}
+\begin{itemize}[leftmargin=*,nosep]
+  \item Use assembler \textbf{directives} to organize a program across Flash code
+        (\texttt{.CSEG}), a Flash data table (\texttt{.DB}), and EEPROM data
+        (\texttt{.ESEG}) -- not just \texttt{.INCLUDE} and \texttt{.ORG}, which
+        you've already used since Lab 1.
+  \item Contrast AVR's \textbf{addressing modes} side by side: immediate,
+        register-direct, and indirect-with-post-increment (the \texttt{Z} register
+        with \texttt{LPM}) to walk a table in Flash.
+  \item Write and use your own \textbf{macro} (\texttt{.MACRO}/\texttt{.ENDM}) to
+        eliminate repeated code -- and learn the one gotcha every AVR macro writer
+        hits eventually.
+  \item Read persistent \textbf{EEPROM} memory at runtime and compare it against a
+        freshly computed \textbf{checksum} -- the same two's-complement scheme
+        every Intel HEX file you've uploaded since Lab 3 already relies on.
+\end{itemize}
+
+\begin{summary}[Quick Reference: Assembler Directives You'll Use]
+\begin{center}
+\begin{tabular}{@{}p{2.3cm}p{6.0cm}p{5.6cm}@{}}
+\toprule
+\textbf{Directive} & \textbf{Purpose} & \textbf{Example} \\
+\midrule
+\texttt{.EQU} & Name a constant -- uses no memory, just text substitution at
+assemble time & \texttt{.EQU TABLE\_LEN = 8} \\
+\texttt{.CSEG} & Begin/continue the Flash \emph{code} segment (also holds
+\texttt{.DB} tables read via \texttt{LPM}) & \texttt{.CSEG} \\
+\texttt{.DB} & Define byte(s) at the current address in the current segment &
+\texttt{TABLE: .DB 8,4,7,5,6,1,2,3} \\
+\texttt{.ESEG} & Begin/continue the \textbf{EEPROM} segment -- a separate address
+space from Flash and SRAM & \texttt{.ESEG} \\
+\texttt{.ORG} & Set the address of whatever follows, within the current segment &
+\texttt{.ORG 0x0000} \\
+\texttt{.MACRO} / \texttt{.ENDM} & Define a reusable named block of instructions,
+expanded inline at every invocation & see the macro box below \\
+\bottomrule
+\end{tabular}
+\end{center}
+Every directive here is scoped to \emph{assembly time} -- none of them exist once
+your program is running. The three segments (\texttt{.CSEG}/Flash,
+\texttt{.ESEG}/EEPROM, and SRAM's \texttt{.DSEG}, not used in this lab) are
+physically separate memories with separate address spaces: address \texttt{0x0000}
+in Flash and address \texttt{0x0000} in EEPROM are two completely different
+storage cells.
+\end{summary}
+
+\begin{summary}[Quick Reference: Addressing Modes Side by Side]
+\begin{center}
+\begin{tabular}{@{}p{3.6cm}p{3.6cm}p{6.7cm}@{}}
+\toprule
+\textbf{Mode} & \textbf{Example} & \textbf{What it means} \\
+\midrule
+Immediate & \texttt{LDI R16,0x24} & The operand \emph{is} the value \texttt{0x24},
+encoded directly in the instruction word \\
+Register (direct) & \texttt{ADD R17,R16} & The operand is whatever a register
+currently holds \\
+Direct I/O & \texttt{OUT PORTB,R16} & The operand is a fixed I/O register address \\
+Indirect, post-increment & \texttt{LPM R16,Z+} & The address to read is held
+\emph{in} the \texttt{Z} register (a pointer, not a value); read Flash at that
+address into \texttt{R16}, then increment \texttt{Z} \\
+\bottomrule
+\end{tabular}
+\end{center}
+Every AVR instruction you've written through Lab 5 used one of the first three
+modes. Indirect addressing is the new one here: instead of the instruction naming
+a fixed address, a register \emph{holds} the address -- which is exactly what lets
+a fixed-size loop walk a table of any length without one hardcoded instruction per
+byte.
+\end{summary}
+
+\begin{summary}[Quick Reference: Defining and Using a Macro]
+\begin{lstlisting}
+.MACRO CHECKSUM_STEP
+    LPM   R16, Z+      ;read next table byte, advance Z
+    ADD   R17, R16     ;add it into the running sum
+.ENDM
+
+;invoke it just like any instruction, as many times as you like:
+CHECKSUM_STEP
+CHECKSUM_STEP
+\end{lstlisting}
+A macro's body is \emph{inserted fresh} into your code at every invocation --
+text substitution at assemble time, not a runtime call like \texttt{CALL}/\texttt{RET}
+(no stack use, no return address, but also no code-size savings: 10 invocations
+means 10 copies of the body in Flash). \texttt{CHECKSUM\_STEP} above is safe to
+invoke any number of times because it contains no label of its own. A macro that
+\emph{does} contain an internal label will fail to assemble the second time it's
+invoked in the same file -- that label would then be defined twice (see Find the
+Bug~1).
+\end{summary}
+
+\begin{summary}[Quick Reference: EEPROM Memory]
+EEPROM is a third, separate memory: unlike SRAM it \textbf{survives power loss},
+but writes are far slower ($\approx$3.3~ms/byte) and rated for only about
+\textbf{100,000 write cycles per byte} on the ATmega328P -- reserve it for values
+that must persist, not for anything rewritten every loop pass. Reserve space with
+\texttt{.ESEG} exactly like a Flash table, but reading it back at runtime needs the
+EEPROM control registers, not \texttt{LPM}:
+\begin{lstlisting}
+.MACRO EEPROM_READ           ;always reads EEPROM address 0x0000
+WAIT_EE:
+    SBIC  EECR, EEPE         ;wait for any earlier write to finish
+    RJMP  WAIT_EE
+    LDI   R16, 0
+    OUT   EEARH, R16
+    OUT   EEARL, R16         ;address = 0x0000
+    SBI   EECR, EERE         ;trigger the read
+    IN    @0, EEDR           ;@0 = the macro's parameter (destination register)
+.ENDM
+\end{lstlisting}
+(\texttt{EEPE}/\texttt{EERE} are \texttt{m328Pdef.inc}'s names for what older
+textbooks and chips call \texttt{EEWE}/\texttt{EERE} -- same register bits, newer
+names, exactly the kind of naming difference Lab 3 already warned you about.)
+Studio assembles a separate \texttt{.eep} file alongside your \texttt{.hex};
+upload it with \texttt{avrdude}'s EEPROM memory type -- the same \texttt{-U}
+syntax as Lab 3's flash write, just a different memory name:
+\begin{lstlisting}[language=bash]
+avrdude -c arduino -p atmega328p -P <port> -b 115200 -U eeprom:w:yourfile.eep:i
+\end{lstlisting}
+\end{summary}
+
+\begin{summary}[Quick Reference: The Two's-Complement Checksum]
+\[
+\text{sum} = (\text{byte}_1 + \text{byte}_2 + \cdots + \text{byte}_N) \bmod 256,
+\qquad
+\text{checksum} = (256 - \text{sum}) \bmod 256
+\]
+\texttt{checksum} is simply the two's complement of \texttt{sum} (one
+\texttt{NEG} instruction). This definition guarantees
+$\text{sum} + \text{checksum} \equiv 0 \pmod{256}$ always -- so \emph{verifying}
+is just ``add every byte, including the checksum byte itself; the total's low
+byte must come out exactly \texttt{0}.'' This is the \emph{exact} scheme Intel HEX
+records use: \texttt{avrdude} has been checking a checksum exactly like this on
+every record of every \texttt{.hex} upload you've done since Lab 3.
+\end{summary}
+
+\begin{summary}[Quick Reference: Your Individual Data Table]
+Take the \textbf{last 8 digits} of your student ID as 8 individual byte values
+(\texttt{0-9} each) -- this is your \texttt{TABLE}.
+\textbf{Worked example} (a made-up ID, do not reuse): ID \texttt{1029384756123}
+$\to$ last 8 digits \texttt{84756123} $\to$ table bytes
+\texttt{8,4,7,5,6,1,2,3}.
+\[
+\text{sum} = 8{+}4{+}7{+}5{+}6{+}1{+}2{+}3 = 36\ (\texttt{0x24}), \qquad
+\text{checksum} = 256 - 36 = 220\ (\texttt{0xDC})
+\]
+Check: $36 + 220 = 256$, low byte $= 0$. \checkmark\ Compute \emph{your own} table
+and checksum now, by hand, in Exercise 1 -- before touching the keyboard.
+\end{summary}
+
+\section*{Bill of Materials}
+No new parts this lab -- just the \textbf{Arduino Uno R3} from previous labs. This
+lab reuses the Uno's \textbf{on-board LED} (\texttt{PB5}/D13) for pass/fail
+indication; no breadboard circuit is required.
+
+\section*{Quick Experiments (Try It)}
+
+\begin{tryit}{Your first macro}
+Define \texttt{INIT\_STACK} as a macro (the four-line stack-pointer
+initialization you've hand-typed at the top of every program since Lab 3):
+\begin{lstlisting}
+.MACRO INIT_STACK
+    LDI   R16, HIGH(RAMEND)
+    OUT   SPH, R16
+    LDI   R16, LOW(RAMEND)
+    OUT   SPL, R16
+.ENDM
+\end{lstlisting}
+Invoke it once at the top of \texttt{MAIN}, build, and open the \texttt{.lst}
+file -- confirm the single line \texttt{INIT\_STACK} expanded into the same four
+instructions you'd have typed by hand.
+\end{tryit}
+
+\begin{tryit}{One indirect read, by itself}
+Load \texttt{Z} with your \texttt{TABLE}'s address (\texttt{LDI ZL,LOW(TABLE*2)}
+/ \texttt{LDI ZH,HIGH(TABLE*2)} -- Flash byte addresses are double the word
+address the label gives you, hence the \texttt{*2}), execute a single
+\texttt{LPM R16,Z+} by itself, and confirm \texttt{R16} holds your table's
+\emph{first} byte (write it to \texttt{PORTB} and check in the simulator, or on a
+logic probe) before writing any loop.
+\end{tryit}
+
+\section*{In-Lab Exercises (target: 3 hours)}
+
+\begin{labexercise}{Derive your table and checksum by hand \hfill {\small \itshape (25 min)}}
+Using the ``Your Individual Data Table'' box above, write out your 8 table bytes
+and compute \texttt{sum} and \texttt{checksum} by hand in your notebook, showing
+every step. Double-check by adding \texttt{sum + checksum} yourself and confirming
+the low byte is exactly \texttt{0} -- this is the same value your program will
+compute in Exercise 3, so an arithmetic slip here will cost you later.
+\end{labexercise}
+
+\begin{labexercise}{Program structure with directives \hfill {\small \itshape (35 min)}}
+Set up your Microchip Studio project with:
+\begin{itemize}[nosep,leftmargin=*]
+  \item A \texttt{.CSEG} table (\texttt{TABLE: .DB} your 8 bytes from Exercise 1)
+        and \texttt{.EQU TABLE\_LEN = 8}.
+  \item An \texttt{.ESEG} reservation (\texttt{REF\_CHECKSUM: .DB} your
+        hand-computed checksum from Exercise 1).
+  \item Your \texttt{INIT\_STACK} macro from Try It 1, invoked once in
+        \texttt{MAIN}.
+\end{itemize}
+Build the project -- Studio produces \emph{both} a \texttt{.hex} and a
+\texttt{.eep} file. Upload \textbf{both} with \texttt{avrdude} (flash exactly as
+in Lab 3, EEPROM using the Quick Reference box's \texttt{eeprom} memory type). Do
+\emph{not} write any checksum-verification logic yet -- this exercise is only
+about getting the segments, directives, and both uploads right.
+\end{labexercise}
+
+\begin{labexercise}{Runtime checksum and verification \hfill {\small \itshape (85 min)}}
+Write your own \texttt{CHECKSUM\_STEP} macro (following the Quick Reference
+pattern) and use it inside a loop of \texttt{TABLE\_LEN} iterations to compute the
+actual checksum over your Flash \texttt{TABLE} at runtime, using \texttt{Z} +
+\texttt{LPM} indirect addressing. Use the \emph{given} \texttt{EEPROM\_READ}
+macro (Quick Reference box above) to read \texttt{REF\_CHECKSUM} back from
+EEPROM. Compare the two values (\texttt{CP}); if they match, light the on-board
+LED (\texttt{PB5}) steady; if they don't, leave it off.
+\begin{itemize}[nosep,leftmargin=*]
+  \item \textbf{Trace/predict first, then verify:} before running it, predict
+        what your program's internally computed \texttt{sum + checksum} should
+        equal, and what the LED should show. Then build, upload, and confirm.
+\end{itemize}
+\end{labexercise}
+
+\begin{labexercise}{Break it on purpose \hfill {\small \itshape (30 min)}}
+Deliberately change \emph{one} byte in your Flash \texttt{TABLE}, re-assemble,
+and re-upload \textbf{flash only} (leave the EEPROM reference untouched). Confirm
+the LED now correctly reports failure. Change the byte back, re-upload, and
+confirm the LED reports success again.
+\begin{itemize}[nosep,leftmargin=*]
+  \item In your notebook, explain in one or two sentences why this exact
+        mechanism -- a stored reference checksum compared against a freshly
+        computed one -- is how real bootloaders and firmware updates detect a
+        corrupted transfer.
+\end{itemize}
+\end{labexercise}
+
+\begin{aicollab}
+\textbf{Try these prompts with an AI tool:}
+\begin{itemize}[leftmargin=*,nosep]
+  \item ``What's the actual difference between an AVR macro
+        (\texttt{.MACRO}/\texttt{.ENDM}) and a subroutine
+        (\texttt{CALL}/\texttt{RET}) -- when would I choose one over the other?''
+  \item ``Why does a fixed internal label inside an AVR macro cause a `duplicate
+        label' error the second time the macro is invoked, and how do real AVR
+        programs work around it?''
+  \item ``What is EEPROM's typical write endurance on an ATmega328P, and why does
+        that affect what you should and shouldn't store there?''
+\end{itemize}
+
+\medskip\textbf{Critical check -- verify, don't just accept:}
+If your Exercise 3 LED shows failure on the first try, verify your hand-computed
+checksum (Exercise 1) against the runtime value byte by byte before assuming your
+code is wrong -- a surprising fraction of first failures turn out to be an
+arithmetic slip in the \emph{hand} calculation, not a bug in the program.
+
+\medskip\textbf{Know the limit:}
+AI tools frequently use ``checksum'' and ``CRC'' interchangeably -- they are
+\emph{not} the same algorithm and do not catch the same errors. A simple
+sum-based checksum like this lab's misses several common multi-bit corruption
+patterns that a CRC would catch; don't let an AI's phrasing imply your checksum
+has CRC-level protection when asking it for help.
+\end{aicollab}
+
+\takehomebanner
+
+\begin{trace}[Compute a checksum by hand]
+For the 6-byte table \texttt{0x1A, 0x03, 0xFF, 0x40, 0x02, 0x1C}, compute
+\texttt{sum} and the two's-complement \texttt{checksum} by hand, showing your
+work. Verify by confirming \texttt{sum + checksum} has a low byte of \texttt{0}.
+\end{trace}
+
+\begin{bug}[A macro invoked twice]
+A student wrote the \texttt{EEPROM\_READ} macro exactly as given in the Quick
+Reference box (with its internal \texttt{WAIT\_EE} label) and invoked it
+\emph{twice} in the same program -- once to read a reference checksum, and once
+to read a second stored calibration byte at a different address. Predict the
+exact category of error the assembler reports, and explain -- in terms of what a
+macro invocation actually does to your source code -- why it happens on the
+\emph{second} invocation specifically, not the first.
+\end{bug}
+
+\begin{writecode}[A parameterized macro]
+On paper, without a computer, simulator, or AI tool, write a macro
+\texttt{TOGGLE\_LED} that takes one parameter (a bit number, \texttt{0-7}) and
+toggles that bit of \texttt{PORTB} -- \emph{without} first reading the pin to
+figure out which state it's currently in. (Hint: re-read the ATmega328P port
+section on what writing a \texttt{1} to a \texttt{PINx} bit does.)
+\end{writecode}
+
+\begin{drawex}{Draw your program's memory map}
+Draw a memory map of your assembled Exercise 3 program: separate boxes for Flash
+(showing \texttt{MAIN}'s code and \texttt{TABLE}, with its address) and EEPROM
+(showing \texttt{REF\_CHECKSUM}, with its address) as two \emph{physically
+separate} address spaces. For each box, label which instruction and which
+addressing mode your program uses to reach it (e.g.\ ``\texttt{LPM Z+}, indirect,
+reads \texttt{TABLE}'').
+\end{drawex}
+
+\section*{Reflection}
+
+This is the last assembly lab before the midterm -- after this, the course moves
+to C. In one short paragraph, look ahead: which of today's five concepts
+(directives, addressing modes, macros, EEPROM, checksums) do you expect to become
+\emph{invisible} in C, handled automatically by the compiler, and which will you
+still control directly yourself, just through different syntax? Consider
+specifically: assembler segments (\texttt{.CSEG}/\texttt{.ESEG}) versus a
+compiler's memory sections, indirect addressing versus C pointers, \texttt{.MACRO}
+versus \texttt{\#define}, and EEPROM access via raw registers versus a library
+call. Is there anything on today's list that C \emph{doesn't} make easier?
+
+\end{document}

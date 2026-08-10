@@ -1,7 +1,7 @@
 \documentclass[11pt]{article}
 \newcommand{\LabNumber}{5}
 \newcommand{\LabTitle}{Keypad Scanning and Display}
-\newcommand{\LabTopic}{Multiplexed keypad input scanning on the Arduino Uno R3, decoded and shown on a single 7-segment digit in AVR assembly -- the input-side counterpart to Lab 4's multiplexed display output}
+\newcommand{\LabTopic}{A 16-function matrix keypad driving an 8-bit two-register calculator (\texttt{first}, \texttt{second}) shown in hex on a multiplexed 4-digit display -- matrix input scanning (Lecture 4) meets AVR arithmetic (Lecture 5)}
 \newcommand{\LabDuration}{3 hours (in-lab)}
 \input{common.tex}
 \usepackage{circuitikz}
@@ -12,34 +12,74 @@
 \section*{Objectives}
 \begin{itemize}[leftmargin=*,nosep]
   \item Understand \textbf{matrix keypad scanning} as multiplexed \emph{input} --
-        the mirror image of Lab 4's multiplexed \emph{output} to a 2-digit display.
-  \item Wire a 4x4 matrix keypad and a single 7-segment digit to the Arduino Uno R3.
-  \item Write AVR assembly that drives one row \textbf{LOW} at a time, polls all
-        four columns (internal pull-ups, idle \textbf{HIGH}), and decodes the
-        resulting (row, column) pair into a key value.
-  \item Debounce keypresses and display the result -- reusing Lab 4-1's
-        \texttt{DIGIT\_TO\_SEG} subroutine \emph{unchanged}.
+        the mirror image of Lab 4's multiplexed \emph{output} to a display -- and
+        recognize that both need exactly 4 one-at-a-time phases, letting the
+        \emph{same} four MCU pins do double duty.
+  \item Wire a 4x4 matrix keypad, where every key is a dedicated \textbf{function}
+        (not a digit), and a 4-digit multiplexed hex display to the Arduino Uno R3.
+  \item Write AVR assembly that decodes a (row, column) key press into one of 16
+        operations on two 8-bit registers, \texttt{first} and \texttt{second}, and
+        applies Lecture 5's arithmetic and shift instructions to update them.
+  \item Extend the provided \texttt{hex\_to\_seg} dispatcher (Lab 4-1's
+        \texttt{DIGIT\_TO\_SEG} idea, grown to \texttt{A-F}) into a full 4-phase
+        multiplexed refresh loop showing \texttt{first} and \texttt{second} as two
+        2-digit hex bytes.
+  \item Debounce keypresses and give \texttt{first}/\texttt{second} well-defined
+        starting values \emph{before} any arithmetic runs, by dialing them up from
+        \texttt{0x00} with the increment/decrement keys.
 \end{itemize}
 
 \begin{summary}[Quick Reference: Pin Assignment]
 \begin{center}
-\begin{tabular}{@{}p{2.1cm}p{1.8cm}p{2.6cm}p{7.4cm}@{}}
+\begin{tabular}{@{}p{2.0cm}p{1.7cm}p{2.6cm}p{7.6cm}@{}}
 \toprule
 \textbf{Port bits} & \textbf{Uno pins} & \textbf{Direction} & \textbf{Function} \\
 \midrule
-\texttt{PB0-PB3} & D8-D11 & Output & Keypad rows \texttt{R1-R4} (driven one at a
-time, active \textbf{low}) \\
-\texttt{PD2-PD5} & D2-D5 & Input, pull-up & Keypad columns \texttt{C1-C4} (idle
-\textbf{high}; pulled \textbf{low} through a pressed key when its row is driven low) \\
-\texttt{PC0-PC5} & A0-A5 & Output & Segments \texttt{a,b,c,d,e,f} \\
-\texttt{PD6} & D6 & Output & Segment \texttt{g} \\
+\texttt{PB0, PB1} & D8, D9 & Output & Segments \texttt{f}, \texttt{a} (shared bus,
+all 4 digits) \\
+\texttt{PB2-PB5} & D10-D13 & Output, \textbf{dual-role} & \texttt{DIGIT1-4}
+cathodes (direct-drive, no transistor -- see Current Budget box) \emph{and}
+keypad rows \texttt{R1-R4}, toggled between input (off) and output-low (on) --
+see ``Digit-Select \& Row Scan'' below \\
+\texttt{PC0-PC3} & A0-A3 & Input, pull-up & Keypad columns \texttt{C1-C4} \\
+\texttt{PC4, PC5} & A4, A5 & -- & Spare (unused) \\
+\texttt{PD2, PD3} & D2, D3 & Output & Segments \texttt{b}, \texttt{c} (shared bus) \\
+\texttt{PD4} & D4 & Output & Decimal point (optional, unused by this lab) \\
+\texttt{PD5-PD7} & D5-D7 & Output & Segments \texttt{d}, \texttt{e}, \texttt{g}
+(shared bus) \\
 \bottomrule
 \end{tabular}
 \end{center}
-This is the \emph{same} segment bit order and hex table as Lab 4-1 -- only segment
-\texttt{g}'s physical pin moved, from \texttt{PD2} to \texttt{PD6}, because
-\texttt{PD2-PD5} are now the keypad's column inputs. There is no digit-select
-transistor this time: a single digit's common cathode goes straight to \textbf{GND}.
+The segment bus is split across two ports -- \texttt{a,f} on \texttt{PORTB},
+\texttt{b,c,d,e,g} on \texttt{PORTD} -- because \texttt{PORTB}'s other bits are
+busy with digit-select/rows and all six of \texttt{PORTC} is reserved for
+keypad columns. Unlike Lab 4-1's tidy single-port bus, writing a digit here means
+one \texttt{OUT PORTB} \emph{and} one \texttt{OUT PORTD} per refresh, not just one.
+\end{summary}
+
+\begin{summary}[Quick Reference: Digit-Select \& Row Scan via DDR Toggle]
+\texttt{PB2-PB5} do two jobs with \emph{one} identical trick, not two opposite
+ones: toggle the pin's \textbf{direction} (\texttt{DDR}) and leave its
+\texttt{PORT} bit permanently \texttt{0}.
+\begin{itemize}[nosep,leftmargin=*]
+  \item \textbf{Input} (\texttt{DDR} bit \texttt{= 0}): the pin floats
+        (high-impedance). A digit's cathode then has no path to ground, so it's
+        dark, \emph{and} that row is not being driven, so a key pressed on it
+        can't pull any column low. Both effects are ``off,'' for free.
+  \item \textbf{Output} (\texttt{DDR} bit \texttt{= 1}, \texttt{PORT} bit
+        \texttt{= 0}): the pin actively sinks to \textbf{GND}. The digit's
+        cathode is grounded, so whatever pattern is already on the segment bus
+        lights up, \emph{and} that row is driven low, so a pressed key on it
+        pulls its column low. Both effects are ``on,'' together, from one
+        \texttt{SBI}/\texttt{CBI DDRB,}$n$.
+\end{itemize}
+Per phase $i$ (pin \texttt{PB}$(2{+}i)$): write digit $i$'s hex pattern to the
+segment bus \emph{first}, then \texttt{SBI DDRB,}$(2{+}i)$ (digit lights up
+already correct, no blank/stale flash), poll \texttt{PINC} once for row $i$'s
+keys, hold for $t_{\text{dwell}}$, then \texttt{CBI DDRB,}$(2{+}i)$ before moving
+to phase $i{+}1$. \texttt{SBI}/\texttt{CBI} need a compile-time constant bit
+number, so this is written as 4 explicit unrolled blocks, not a loop indexed by
+a register -- see the Starter Code below.
 \end{summary}
 
 \begin{summary}[Quick Reference: How Matrix Scanning Works]
@@ -48,38 +88,149 @@ key does nothing but bridge \emph{one} row wire to \emph{one} column wire when
 pressed; there is no other connection inside the keypad. Driving all 4 rows at once
 would make every key on a pressed column look identical, so scanning removes the
 ambiguity: drive exactly \emph{one} row \textbf{LOW} (the other three stay
-\textbf{HIGH}), read all 4 columns, and only trust what you read while that one row
-is the low one. Cycle through all 4 rows, fast enough that a keypress during any
-row's turn gets caught.
+floating/inactive), read all 4 columns, and only trust what you read while that
+one row is the low one. Cycle through all 4 rows, fast enough that a keypress
+during any row's turn gets caught.
+\end{summary}
+
+\begin{summary}[Quick Reference: Function Key Map]
+Unlike a calculator's 0-9 keypad, \emph{every} key on this board is a dedicated
+operation on one of two 8-bit registers: {\color{accent}\texttt{first}} (columns
+\texttt{C1-C2}) or {\color{ok!70!black}\texttt{second}} (columns \texttt{C3-C4}).
+\textbf{Confirm this against your physical board's silkscreen/labels} before
+trusting any decode -- this table matches this lab's reference board.
 \begin{center}
-\begin{tabular}{@{}c|cccc@{}}
+\begin{tabular}{@{}c p{3.15cm} p{3.15cm} p{3.15cm} p{3.15cm}@{}}
 \toprule
  & \textbf{C1} & \textbf{C2} & \textbf{C3} & \textbf{C4} \\
 \midrule
-\textbf{R1} & 1 & 2 & 3 & A \\
-\textbf{R2} & 4 & 5 & 6 & B \\
-\textbf{R3} & 7 & 8 & 9 & C \\
-\textbf{R4} & * & 0 & \# & D \\
+\textbf{R1} &
+{\color{accent}\texttt{S1}: inc \texttt{first}} &
+{\color{accent}\texttt{S2}: dec \texttt{first}} &
+{\color{ok!70!black}\texttt{S3}: inc \texttt{second}} &
+{\color{ok!70!black}\texttt{S4}: dec \texttt{second}} \\
+\textbf{R2} &
+{\color{accent}\texttt{S5}: inc inc \texttt{first}} &
+{\color{accent}\texttt{S6}: dec dec \texttt{first}} &
+{\color{ok!70!black}\texttt{S7}: inc inc \texttt{second}} &
+{\color{ok!70!black}\texttt{S8}: dec dec \texttt{second}} \\
+\textbf{R3} &
+{\color{accent}\texttt{S9}: \texttt{first = first << 1}} &
+{\color{accent}\texttt{S10}: \texttt{first = first << second}} &
+{\color{ok!70!black}\texttt{S11}: \texttt{second = second << 1}} &
+{\color{ok!70!black}\texttt{S12}: \texttt{second = second << first}} \\
+\textbf{R4} &
+{\color{accent}\texttt{S13}: \texttt{first = first + second}} &
+{\color{accent}\texttt{S14}: \texttt{first = first - second}} &
+{\color{ok!70!black}\texttt{S15}: \texttt{second = second - first}} &
+{\color{ok!70!black}\texttt{S16}: \texttt{second = second + first}} \\
 \bottomrule
 \end{tabular}
 \end{center}
-This is the standard layout for most inexpensive 4x4 membrane keypads --
-\textbf{confirm it against your physical keypad's printed labels} before trusting
-any decoded output; wiring order varies between manufacturers. Only \texttt{0-9}
-have a segment code from Lab 4-1's table; for \texttt{A,B,C,D,*,\#}, just display a
-dash (segment \texttt{g} only) as a ``not a digit'' indicator -- no new segment
-codes needed.
+``inc inc'' / ``dec dec'' means \emph{call the increment/decrement routine twice},
+not a separate \texttt{+2} instruction -- reusing \texttt{R1}'s single-step
+routine is the point. All eight arithmetic keys (\texttt{R3-R4}) are ordinary
+8-bit AVR ops: \texttt{first}/\texttt{second} wrap silently on overflow/underflow
+(mod 256) exactly as \texttt{ADD}/\texttt{SUB} leave them, with the \texttt{C} flag
+recording what wrapped -- see Exercise 5 and the take-home Trace problem.
+
+The four rows split into two structurally different kinds of key. \texttt{R1-R2}
+are \textbf{single-register} ops -- each key touches only \texttt{first} \emph{or}
+only \texttt{second}, never both, so they're the only keys that make sense on a
+freshly-reset board where both registers are still \texttt{0x00}. \texttt{R3-R4}
+are \textbf{combining} ops -- every one reads \emph{both} registers to update one
+of them (a shift by the other register's amount, or an add/subtract between the
+two), so they only do something meaningful once both already hold real values.
+That split is exactly why Exercise 3 (input phase) uses only \texttt{R1-R2}, and
+Exercise 4 (dispatch table) is where \texttt{R3-R4} first do anything.
+\end{summary}
+
+\begin{summary}[Quick Reference: Hex Segment Codes]
+Digits \texttt{0-9} use the classic \texttt{gfedcba} bit order (bit \texttt{0} =
+segment \texttt{a} \ldots bit \texttt{6} = segment \texttt{g}). This lab's
+display can also show \texttt{A-F}, since \texttt{first}/\texttt{second} are full
+bytes (\texttt{0x00-0xFF}), not decimal counters:
+\begin{center}
+\begin{tabular}{@{}ccccccccccccccccc@{}}
+\toprule
+\textbf{Digit} & 0 & 1 & 2 & 3 & 4 & 5 & 6 & 7 & 8 & 9 & A & b & C & d & E & F \\
+\midrule
+\textbf{Hex} & \texttt{3F} & \texttt{06} & \texttt{5B} & \texttt{4F} & \texttt{66}
+& \texttt{6D} & \texttt{7D} & \texttt{07} & \texttt{7F} & \texttt{6F} &
+\texttt{77} & \texttt{7C} & \texttt{39} & \texttt{5E} & \texttt{79} & \texttt{71} \\
+\bottomrule
+\end{tabular}
+\end{center}
+\texttt{b} and \texttt{d} are drawn lowercase (segments \texttt{c,d,e,f,g} and
+\texttt{b,c,d,e,g} respectively) so they don't read as \texttt{8} and \texttt{0}
+on a 7-segment digit -- \texttt{A, C, E, F} stay uppercase since they're
+unambiguous. The provided \texttt{hex\_to\_seg} dispatcher (Starter Code below)
+implements exactly this table as a \texttt{CPI}/\texttt{BRNE} chain, extending
+Lab 4-1's \texttt{DIGIT\_TO\_SEG} idea with six more branches for \texttt{A-F}.
+\end{summary}
+
+\begin{summary}[Quick Reference: Current Budget -- Why No Transistors Here, and the Catch]
+Lab 4-1 used an NPN transistor per digit specifically so the AVR pin only ever
+sources the transistor's small \textbf{base} current, not the segments'
+combined current. This lab's reference board skips that stage: \texttt{PB2-PB5}
+sink each digit's cathode \emph{directly}. That works electrically, but it
+removes Lab 4-1's safety margin -- check it before you trust it.
+\[
+I_{\text{segment}} = \frac{V_{CC} - V_{LED}}{R} \approx \frac{5\text{V} -
+2\text{V}}{330\Omega} \approx 9.1\text{ mA}, \qquad
+I_{\text{digit (worst case)}} = 7 \times I_{\text{segment}} \approx 64\text{ mA}
+\]
+Digit \texttt{8} lights all 7 segments at once, so its digit-select pin
+momentarily sinks $\approx$64~mA -- \emph{above} the ATmega328P's 40~mA
+absolute-maximum per-pin rating, even though it's only for one
+$t_{\text{dwell}}$ at a time. Many boards survive this in practice (real parts
+have margin beyond their datasheet limits), but it is out-of-spec, not a safe
+design. Before wiring your board, decide: increase the segment resistors
+(e.g.\ 330$\Omega\to$1k$\Omega$ cuts $I_{\text{digit}}$ to $\approx$21~mA, back
+under the limit, at the cost of a dimmer display), or reintroduce Lab 4-1's
+transistor stage on \texttt{PB2-PB5}. Either choice is acceptable for this lab
+-- record which you picked and why.
+\end{summary}
+
+\begin{summary}[Quick Reference: Multiplexing and Refresh Rate]
+Only \emph{one} digit's common cathode is ever grounded at a time. Show each digit
+for a short \textbf{dwell time} $t_{\text{dwell}}$, then switch to the next --
+fast enough that the eye's flicker-fusion threshold ($\approx$50-60~Hz) blends all
+four into one steady image:
+\[
+f_{\text{refresh}} = \frac{1}{N_{\text{digits}} \times t_{\text{dwell}}}, \qquad
+N_{\text{digits}} = 4 \ \Rightarrow\ t_{\text{dwell}} \le \frac{1}{4 \times 60\text{Hz}}
+\approx 4.17\text{ ms}
+\]
+This bound is \emph{tighter} than Lab 4-1's 2-digit bound (8.3~ms) -- twice as many
+digits means half the time budget per digit for the same refresh rate. Recompute
+$f_{\text{refresh}}$ for your own $t_{\text{dwell}}$ below and confirm you're still
+comfortably clear of 60~Hz.
 \end{summary}
 
 \begin{summary}[Quick Reference: Your Individual Target]
-As in Labs 3 and 4-1, derive your personal target from your student ID:
+As in Labs 3, 4-1, and 4-2, derive your personal targets from your student ID:
 \[
-D = \text{sum of every digit in your student ID}, \qquad
-t_{\text{debounce}} = 15\text{ ms} + (D \bmod 10) \times 1\text{ ms}
+D = \text{sum of every digit in your student ID}
 \]
+\begin{center}
+\begin{tabular}{@{}p{4.6cm}p{10.0cm}@{}}
+\toprule
+\textbf{Quantity} & \textbf{Formula} \\
+\midrule
+Key debounce & $t_{\text{debounce}} = 15\text{ ms} + (D \bmod 10) \times 1\text{ ms}$ \\
+Display dwell time & $t_{\text{dwell}} = 1.5\text{ ms} + (D \bmod 6) \times 0.4\text{ ms}$ \\
+\texttt{first} input target & $F_{\text{target}} = D \bmod 32$ (as \texttt{0x}\ldots hex on the display) \\
+\texttt{second} input target & $S_{\text{target}} = (3 \times D) \bmod 32$ \\
+\bottomrule
+\end{tabular}
+\end{center}
 \textbf{Worked example} (a made-up ID, do not reuse): ID \texttt{1029384756123}
-$\to D = 51$. Then $t_{\text{debounce}} = 15 + (51 \bmod 10) \times 1 = 15 + 1 =
-16$~ms.
+$\to D = 51$. Then $t_{\text{debounce}} = 15 + (51 \bmod 10) \times 1 = 16$~ms;
+$t_{\text{dwell}} = 1.5 + (51 \bmod 6) \times 0.4 = 1.5 + 3 \times 0.4 = 2.7$~ms
+(so $f_{\text{refresh}} \approx 92.6$~Hz, clear of the 60~Hz bound);
+$F_{\text{target}} = 51 \bmod 32 = 19 = \texttt{0x13}$; $S_{\text{target}} =
+153 \bmod 32 = 25 = \texttt{0x19}$.
 \end{summary}
 
 \section*{Bill of Materials}
@@ -89,27 +240,73 @@ $\to D = 51$. Then $t_{\text{debounce}} = 15 + (51 \bmod 10) \times 1 = 15 + 1 =
 \textbf{Qty} & \textbf{Part} & \textbf{Notes} \\
 \midrule
 1 & Arduino Uno R3 (from Lab 3/4) & Supplies power, ground, and all signal pins \\
-1 & 4x4 matrix keypad module (8-pin) & \texttt{R1-R4}, \texttt{C1-C4} \\
-1 & 7-segment display, \textbf{common cathode} & Single digit -- no transistor
-needed \\
-7 & Resistor, 330~$\Omega$ & Segment current limiting, \texttt{a-g} \\
+1 & 4x4 matrix keypad module (8-pin), 16 keys each bound to one function &
+\texttt{R1-R4}, \texttt{C1-C4} \\
+1 & 4-digit 7-segment display, \textbf{common cathode} (or 2 dual-digit modules
+wired as one 4-digit bus) & \texttt{DIGIT1-2} = \texttt{first}, \texttt{DIGIT3-4}
+= \texttt{second} \\
+7 & Resistor, 330~$\Omega$ (or 1~k$\Omega$ -- see Current Budget box) & Shared
+segment resistors \texttt{a-g} (one per segment, not per digit) \\
+-- & \emph{Optional:} 4 NPN transistor + 4 base resistors (Lab 4-1 style) &
+Only if you chose the transistor option in the Current Budget box \\
 1 & Breadboard + jumper wires & \\
 \bottomrule
 \end{tabular}
 \end{center}
 
+\begin{summary}[Quick Reference: Display Module Pinout (12-pin, common cathode)]
+This lab's reference build uses a 4-digit module with this physical pinout (pin
+numbers count around the package, not left-to-right) -- \textbf{confirm against
+your own module's datasheet/silkscreen} before wiring, since 12-pin 4-digit
+modules vary between manufacturers even when common-cathode.
+\begin{center}
+\begin{tabular}{@{}cccc|cccc@{}}
+\toprule
+\textbf{Pin} & \textbf{Label} & \textbf{MCU pin} & & \textbf{Pin} & \textbf{Label} & \textbf{MCU pin} & \\
+\midrule
+1 & E & \texttt{PD6} (D6) & & 7 & B & \texttt{PD2} (D2) & \\
+2 & D & \texttt{PD5} (D5) & & 8 & D3 & \texttt{PB4} (D12) & \\
+3 & C & \texttt{PD3} (D3) & & 9 & D2 & \texttt{PB3} (D11) & \\
+4 & G & \texttt{PD7} (D7) & & 10 & F & \texttt{PB0} (D8) & \\
+5 & D4 & \texttt{PB5} (D13) & & 11 & A & \texttt{PB1} (D9) & \\
+6 & \emph{(DP, unused)} & -- & & 12 & D1 & \texttt{PB2} (D10) & \\
+\bottomrule
+\end{tabular}
+\end{center}
+\texttt{D1-D4} are the four digit \emph{commons} (cathodes) -- \texttt{D1} is
+this lab's \texttt{DIGIT1} (leftmost, \texttt{first}'s high nibble) through
+\texttt{D4} (rightmost, \texttt{second}'s low nibble), matching the ``first \textbar\
+second'' layout on the display. Pin 6's decimal point is present on the package
+but unused by this lab -- leave it unconnected.
+\end{summary}
+
 \section*{Building the Circuit}
 \begin{enumerate}[leftmargin=*,nosep]
-  \item \textbf{Rows.} Wire keypad \texttt{R1-R4} to \texttt{PB0-PB3} (Uno D8-D11).
-        These are \textbf{outputs} -- the MCU actively drives them, one at a time.
-  \item \textbf{Columns.} Wire keypad \texttt{C1-C4} to \texttt{PD2-PD5} (Uno
-        D2-D5). These are \textbf{inputs} with the AVR's internal pull-up enabled
-        -- no external resistor, exactly like Lab 4-1's buttons.
-  \item \textbf{Display.} Wire segments \texttt{a-f} through 330~$\Omega$ resistors
-        to \texttt{PC0-PC5} (A0-A5), segment \texttt{g} through a 330~$\Omega$
-        resistor to \texttt{PD6} (D6), and the common cathode straight to
-        \textbf{GND}. One digit, always lit when driven -- no multiplexed refresh
-        loop this time.
+  \item \textbf{Rows.} Wire keypad \texttt{R1-R4} to \texttt{PB2-PB5} (Uno
+        D10-D13) -- the \emph{same} four pins as digit-select (step 4).
+  \item \textbf{Columns.} Wire keypad \texttt{C1-C4} to \texttt{PC0-PC3} (Uno
+        A0-A3). These are \textbf{inputs} with the AVR's internal pull-up enabled
+        -- no external resistor.
+  \item \textbf{Segment bus.} For all 4 digits, tie \emph{every} digit's
+        same-lettered segment pin together (module pins \texttt{A,B,C,D,E,F,G} --
+        Display Module Pinout box), then run that shared node through one
+        330~$\Omega$ (or 1~k$\Omega$) resistor to the matching MCU pin
+        (\texttt{a}(11)$\to$\texttt{PB1}, \texttt{f}(10)$\to$\texttt{PB0},
+        \texttt{b}(7)$\to$\texttt{PD2}, \texttt{c}(3)$\to$\texttt{PD3},
+        \texttt{d}(2)$\to$\texttt{PD5}, \texttt{e}(1)$\to$\texttt{PD6},
+        \texttt{g}(4)$\to$\texttt{PD7}). 7 resistors and 7 MCU pins drive all 4
+        digits, not 28.
+  \item \textbf{Digit-select.} Module pin \texttt{D1} (pin 12, leftmost digit)
+        goes \emph{directly} to \texttt{PB2}, \texttt{D2} (pin 9) to
+        \texttt{PB3}, \texttt{D3} (pin 8) to \texttt{PB4}, \texttt{D4} (pin 5,
+        rightmost) to \texttt{PB5} -- the \emph{same} four pins used for keypad
+        rows \texttt{R1-R4}. No transistor, unless you chose that option in the
+        Current Budget box, in which case wire it exactly as Lab 4-1 did
+        (cathode $\to$ collector, emitter $\to$ GND, base $\to$ 1~k$\Omega$
+        $\to$ \texttt{PB}$(2{+}i)$).
+        Double-check each \texttt{PB}$(2{+}i)$ node really does connect to
+        \emph{both} the keypad row \emph{and} the digit's cathode -- this is
+        the one wiring step that differs from Lab 4-1.
 \end{enumerate}
 
 \begin{figure}[h!]
@@ -122,106 +319,370 @@ needed \\
 
 % ---------------- Keypad box ----------------
 \node[draw, fill=accentlight, minimum width=3cm, minimum height=3cm, align=center]
-     at (3,5) (kp) {\textbf{4x4 KEYPAD}};
+     at (3,5) (kp) {\textbf{4x4 KEYPAD}\\\scriptsize 16 functions};
 
-% Row pins (left edge) <- PB0-PB3
-\draw (0,6.0) node[left]{\texttt{PB0} (D8)}  -- (1.5,6.0) node[pos=0.85,above]{R1};
-\draw (0,5.5) node[left]{\texttt{PB1} (D9)}  -- (1.5,5.5) node[pos=0.85,above]{R2};
-\draw (0,5.0) node[left]{\texttt{PB2} (D10)} -- (1.5,5.0) node[pos=0.85,above]{R3};
-\draw (0,4.5) node[left]{\texttt{PB3} (D11)} -- (1.5,4.5) node[pos=0.85,above]{R4};
+% Row pins (left edge) <- PB2-PB5, dual-role
+\draw (0,6.0) node[left]{\texttt{PB2} (D10)} -- (1.5,6.0) node[pos=0.85,above]{R1};
+\draw (0,5.5) node[left]{\texttt{PB3} (D11)} -- (1.5,5.5) node[pos=0.85,above]{R2};
+\draw (0,5.0) node[left]{\texttt{PB4} (D12)} -- (1.5,5.0) node[pos=0.85,above]{R3};
+\draw (0,4.5) node[left]{\texttt{PB5} (D13)} -- (1.5,4.5) node[pos=0.85,above]{R4};
+\node[align=center, font=\tiny] at (0,7.0) {also wired straight to\\DIGIT1-4's cathodes,\\see Fig.~2};
 
-% Column pins (right edge) -> PD2-PD5
-\draw (4.5,6.0) -- (6,6.0) node[right]{\texttt{PD2} (D2)};
+% Column pins (right edge) -> PC0-PC3
+\draw (4.5,6.0) -- (6,6.0) node[right]{\texttt{PC0} (A0)};
 \node[above] at (4.725,6.0) {C1};
-\draw (4.5,5.5) -- (6,5.5) node[right]{\texttt{PD3} (D3)};
+\draw (4.5,5.5) -- (6,5.5) node[right]{\texttt{PC1} (A1)};
 \node[above] at (4.725,5.5) {C2};
-\draw (4.5,5.0) -- (6,5.0) node[right]{\texttt{PD4} (D4)};
+\draw (4.5,5.0) -- (6,5.0) node[right]{\texttt{PC2} (A2)};
 \node[above] at (4.725,5.0) {C3};
-\draw (4.5,4.5) -- (6,4.5) node[right]{\texttt{PD5} (D5)};
+\draw (4.5,4.5) -- (6,4.5) node[right]{\texttt{PC3} (A3)};
 \node[above] at (4.725,4.5) {C4};
 
-% ---------------- Segment section ----------------
-\node[draw, fill=accentlight, minimum width=3cm, minimum height=1.6cm, align=center]
-     at (3,0.5) (dig) {\textbf{DIGIT}\\common cathode};
-
-\node[align=center] at (3,3.4) {\scriptsize \texttt{PC0-PC5} (A0-A5), \texttt{PD6} (D6)};
-
-\foreach \i/\lbl in {0/a, 1/b, 2/c, 3/d, 4/e, 5/f, 6/g} {
-  \draw (1.65+\i*0.47,3.0) to[R] (1.65+\i*0.47,1.3);
-  \node[below right] at (1.65+\i*0.47,1.35) {\tiny \lbl};
-}
-
-\draw (dig.south) -- ++(0,-0.8) node[ground]{};
-
 \end{circuitikz}
-\caption{Keypad and single-digit display wiring. Each key merely bridges its row
-line to its column line when pressed -- there is no component inside the keypad
-beyond that mechanical bridge. Segment resistors shown individually since, unlike
-Lab 4-1, there is only one digit to drive (no shared bus, no multiplexing).}
+\caption{Keypad wiring. Each key merely bridges its row line to its column line
+when pressed. \texttt{PB2-PB5} (\texttt{R1-R4}) are dual-role -- see Fig.~2 for
+the digit cathodes sharing these same four pins, no transistor.}
 \end{figure}
 
+\begin{figure}[h!]
+\centering
+\begin{circuitikz}[american voltages, scale=0.72, transform shape, font=\scriptsize]
+
+\draw (0,7.5) node[above, align=center]{\texttt{PB1} (D9)\\segment \texttt{a}}
+      to[R, l=$330\Omega$] (0,6.2) coordinate(nodeA);
+\node[circ] at (nodeA) {};
+
+\node[draw, fill=accentlight, minimum width=2.6cm, minimum height=1.1cm, align=center]
+     at (2.7,6.2) (d1) {\textbf{DIGIT1}\\seg \texttt{a}};
+\node[draw, fill=accentlight, minimum width=2.6cm, minimum height=1.1cm, align=center]
+     at (2.7,4.2) (d2) {\textbf{DIGIT2}\\seg \texttt{a}};
+\node[draw, fill=accentlight, minimum width=2.6cm, minimum height=1.1cm, align=center]
+     at (2.7,2.2) (d3) {\textbf{DIGIT3}\\seg \texttt{a}};
+\node[draw, fill=accentlight, minimum width=2.6cm, minimum height=1.1cm, align=center]
+     at (2.7,0.2) (d4) {\textbf{DIGIT4}\\seg \texttt{a}};
+
+\draw (nodeA) |- (d1.west);
+\draw (nodeA) |- (d2.west);
+\draw (nodeA) |- (d3.west);
+\draw (nodeA) |- (d4.west);
+
+\draw (d1.east) -- ++(1.6,0) node[right]{cathode $\to$ \texttt{PB2} (also \texttt{R1})};
+\draw (d2.east) -- ++(1.6,0) node[right]{cathode $\to$ \texttt{PB3} (also \texttt{R2})};
+\draw (d3.east) -- ++(1.6,0) node[right]{cathode $\to$ \texttt{PB4} (also \texttt{R3})};
+\draw (d4.east) -- ++(1.6,0) node[right]{cathode $\to$ \texttt{PB5} (also \texttt{R4})};
+
+\end{circuitikz}
+\caption{Digit cathodes wired \emph{directly} to the same \texttt{PB2-PB5} pins
+used for keypad rows in Fig.~1 -- no transistor stage (see Current Budget box).
+Segment \texttt{a} shown representative of the full bus (\texttt{PB0-PB1},
+\texttt{PD2,PD3,PD5-PD7}), which repeats identically and is omitted here for
+readability. \texttt{DIGIT1-DIGIT2} display \texttt{first}; \texttt{DIGIT3-DIGIT4}
+display \texttt{second}.}
+\end{figure}
+
+\section*{Provided Starter Code}
+The skeleton below is given: the one-time setup, the \texttt{hex\_to\_seg}
+pattern (shown for digits \texttt{0}-\texttt{1} -- finishing the rest is
+Pre-Lab Task 1, next section), \texttt{Delay1ms}, and the 4-phase
+\texttt{REFRESH} loop's shape. Everything marked \texttt{TODO} is deliberately
+unfinished, in three stages: stashing/decoding the column poll into a
+\texttt{key\_index} is Pre-Lab Task 2 (also next section, \emph{before} this
+lab session); debouncing it is Exercise 2; dispatching it to an actual
+operation on \texttt{first}/\texttt{second} is Exercise 4 -- the two pieces
+that are mostly mechanical (getting every segment code right, getting a
+reliable 16-key decode) are pushed to homework, so lab time goes to the
+arithmetic that's this lab's actual point.
+
+\begin{lstlisting}[style=asm]
+; ---- one-time setup: segment pins are ALWAYS outputs, never re-cleared ----
+sbi   DDRB, 0          ; PB0 = seg f
+sbi   DDRB, 1          ; PB1 = seg a
+sbi   DDRD, 2          ; PD2 = seg b
+sbi   DDRD, 3          ; PD3 = seg c
+sbi   DDRD, 5          ; PD5 = seg d
+sbi   DDRD, 6          ; PD6 = seg e
+sbi   DDRD, 7          ; PD7 = seg g
+; PB2-PB5 (digit-select / rows) start as INPUTS (the AVR reset default) --
+; do NOT set their DDR bits here; each refresh phase below toggles just its
+; own bit, on the way in and back out.
+cbi   DDRC, 0          ; PC0-PC3 = keypad columns, input
+cbi   DDRC, 1
+cbi   DDRC, 2
+cbi   DDRC, 3
+sbi   PORTC, 0         ; internal pull-ups on
+sbi   PORTC, 1
+sbi   PORTC, 2
+sbi   PORTC, 3
+
+; ---- hex_to_seg: r17 (0x0-0xF) in, segment bus written, r17 clobbered ----
+; Same CPI/BRNE-chain idea as Lab 4-1's DIGIT_TO_SEG; 0-9 identical, A-F new.
+hex_to_seg:
+    cpi   r17, 0x0
+    brne  hts_1
+    sbi   PORTB, 1      ; a
+    sbi   PORTD, 2      ; b
+    sbi   PORTD, 3      ; c
+    sbi   PORTD, 5      ; d
+    sbi   PORTD, 6      ; e
+    sbi   PORTB, 0      ; f
+    cbi   PORTD, 7      ; g
+    ret
+hts_1:
+    cpi   r17, 0x1
+    brne  hts_2
+    cbi   PORTB, 1
+    sbi   PORTD, 2
+    sbi   PORTD, 3
+    cbi   PORTD, 5
+    cbi   PORTD, 6
+    cbi   PORTB, 0
+    cbi   PORTD, 7
+    ret
+hts_2:
+    ; ... continue the same pattern for 2-9 ...
+    ; then A, b, C, d, E, F using the Hex Segment Codes table above
+    ret
+
+; ---- one-time delay tick (~1ms at 16MHz); call it N times for N ms ----
+Delay1ms:
+    ldi   r18, 21
+dl1: ldi  r19, 25
+dl2: dec  r19
+     brne dl2
+     dec  r18
+     brne dl1
+     ret
+
+; ---- REFRESH: 4 unrolled phases (SBI/CBI need a compile-time bit number, ----
+; ---- so this can't be a loop indexed by a register -- see the box above) ----
+; r21 = first (0x00-0xFF), r22 = second (0x00-0xFF)
+REFRESH:
+    ; ---- Phase 1: first's high nibble, row R1 ----
+    mov   r17, r21
+    swap  r17           ; one instruction instead of four LSLs/LSRs
+    andi  r17, 0x0F
+    rcall hex_to_seg
+    sbi   DDRB, 2        ; DIGIT1 on, ROW1 driven low
+    in    r16, PINC      ; poll C1-C4 for row 1
+    ; TODO (Pre-Lab Task 2): mask to bits 0-3, compare against 0x0F (the
+    ; "no key in this row" sentinel), and if not equal, fold row+column into
+    ; a single key_index (0-15) and stash it.
+    rcall Delay1ms        ; repeat/scale to your t_dwell
+    cbi   DDRB, 2        ; DIGIT1 off, ROW1 floats
+
+    ; ---- Phase 2: first's low nibble, row R2 ----
+    mov   r17, r21
+    andi  r17, 0x0F
+    rcall hex_to_seg
+    sbi   DDRB, 3
+    in    r16, PINC      ; row 2
+    rcall Delay1ms
+    cbi   DDRB, 3
+
+    ; ---- Phase 3: second's high nibble, row R3 ----
+    mov   r17, r22
+    swap  r17
+    andi  r17, 0x0F
+    rcall hex_to_seg
+    sbi   DDRB, 4
+    in    r16, PINC      ; row 3
+    rcall Delay1ms
+    cbi   DDRB, 4
+
+    ; ---- Phase 4: second's low nibble, row R4 ----
+    mov   r17, r22
+    andi  r17, 0x0F
+    rcall hex_to_seg
+    sbi   DDRB, 5
+    in    r16, PINC      ; row 4
+    rcall Delay1ms
+    cbi   DDRB, 5
+
+    ; TODO (Exercise 2): debounce key_index against t_debounce.
+    ; TODO (Exercise 4): dispatch key_index to one of the 16 functions
+    ; (Function Key Map) and update r21/r22 accordingly.
+
+    rjmp  REFRESH
+\end{lstlisting}
+
+\section*{Pre-Lab Homework (complete before this session)}
+Two pieces of this lab are almost entirely mechanical -- getting every hex
+digit's segment pattern right, and getting a reliable row/column decode for
+all 16 keys -- and neither one teaches Lecture 5's actual content (arithmetic
+on \texttt{first}/\texttt{second}). Do them now, at home, on \emph{whatever}
+breadboard/pin layout is convenient -- a single-port scheme (e.g.\ rows and
+columns both on \texttt{PORTD}, like a tutorial example) is perfectly fine
+here, \emph{unlike} the final board. Exercise 1 in lab is specifically about
+porting a working result onto this lab's real \texttt{PB2-PB5}/\texttt{PC0-PC3}
+pin map -- that's lab work, not homework. Bring your working \texttt{.asm} (or
+your best attempt, with notes on what's not working) to the lab session.
+
+\subsection*{Task 1 -- Finish \texttt{hex\_to\_seg}}
+Extend the \texttt{hex\_to\_seg} pattern shown in the Starter Code (digits
+\texttt{0} and \texttt{1} are done) through every remaining hex digit
+(\texttt{2-9, A, b, C, d, E, F}), using the Hex Segment Codes table. Test it on
+a single digit (any breadboard wiring you like) by cycling through all 16
+values and confirming each one visually matches the table -- the same
+checkpoint discipline as Lab 4-1's static-digit test, just six more digits.
+
+\subsection*{Task 2 -- Full 4-row keypad scan and decode}
+Write a routine that cycles all 4 rows and, for each row, decides in \emph{one}
+comparison whether any key in that row is pressed: read the column pins, mask
+to just the 4 column bits, and compare the result against the ``no key''
+sentinel (all 4 bits still high) -- one \texttt{ANDI} + one \texttt{CPI}, not
+four separate bit tests. If it's not equal to the sentinel, decode \emph{which}
+column bit went low and combine it with the current row into a single
+\texttt{key\_index} from \texttt{0} to \texttt{15} (e.g.\
+\texttt{key\_index = row}$\times$\texttt{4 + column}). Verify by displaying
+\texttt{key\_index} in hex on a single digit every time a key is pressed, for
+all 16 keys -- don't worry about functions, debounce, or
+\texttt{first}/\texttt{second} yet, just prove the decode is right for every
+key.
+
+\medskip
+\textbf{Why this matters for grading:} the in-lab exercises assume Tasks 1-2
+already work. If you arrive without them, Exercise 1 (below) is where you'll
+have to finish them under time pressure, on the harder real pin map -- eating
+into the time budgeted for the arithmetic dispatch table (Exercise 4) that's
+this lab's actual point.
+
 \section*{Quick Experiments (Try It)}
+Now that Tasks 1-2 work \emph{somewhere}, these two checks confirm they still
+work on \emph{this} board's specific pins before you rely on them in Exercise 1.
 
 \begin{tryit}{Rows and columns, by hand}
-Before writing any scanning code, drive \texttt{PB0} (Row 1) \textbf{LOW} and
-\texttt{PB1-PB3} \textbf{HIGH}, with columns configured as instructed above. Touch
-a jumper wire between the \texttt{R1} and \texttt{C1} pins on the breadboard
-(simulating pressing the ``1'' key) and confirm \texttt{IN R17,PIND} shows bit~2
-(\texttt{PD2}, column 1) go \textbf{LOW} only while the wire bridges those two
-specific pins. This confirms your wiring before any scanning loop exists.
+Before writing any scanning code, execute \texttt{SBI DDRB,2} (Row 1 on, leaving
+\texttt{PORTB,2} at \texttt{0}) with the other \texttt{PB3-PB5} bits left as
+inputs, and columns configured as instructed above. Touch a jumper wire between
+the \texttt{R1} and \texttt{C1} pins on the breadboard (simulating pressing the
+``inc \texttt{first}'' key) and confirm \texttt{IN R16,PINC} shows bit~0
+(\texttt{PC0}, column 1) go \textbf{LOW} only while the wire bridges those two
+specific pins. Notice \texttt{DIGIT1} also lit up the instant you set
+\texttt{DDRB,2} -- expected, since it's the same pin doing both jobs.
 \end{tryit}
 
 \begin{tryit}{One row, no full scan}
-Write a short loop that drives \emph{only} \texttt{R1} low (\texttt{R2-R4} stay
-high) and polls \texttt{C1-C4}. Confirm that keys \texttt{1, 2, 3, A} register
-while keys on other rows (e.g.\ \texttt{5} or \texttt{9}) do \emph{not} -- even
-though you have not yet written code to scan those other rows. This is your
-checkpoint that a single row's scan works in isolation, the same incremental
-approach Lab 4-1 used before combining two digits.
+Write a short loop that only ever asserts \texttt{DDRB,2} (Row 1) and polls
+\texttt{PINC}. Confirm that keys \texttt{inc first}, \texttt{dec first},
+\texttt{inc second}, \texttt{dec second} register while keys on other rows
+(e.g.\ \texttt{inc inc first} or \texttt{first = first + second}) do \emph{not}
+-- even though you have not yet written code to scan those other rows. This is
+your checkpoint that a single phase's scan-and-select works in isolation.
 \end{tryit}
 
 \section*{In-Lab Exercises (target: 3 hours)}
+These assume Pre-Lab Tasks 1-2 already work \emph{somewhere} -- lab time goes
+to porting, debouncing, and dispatching, not to writing the scan/decode from
+scratch.
 
-\begin{labexercise}{Wire and verify the display alone \hfill {\small \itshape (30 min)}}
-Wire the display per the instructions above and re-run Lab 4-1's static-digit test
-(cycle 0-9, holding each briefly) \emph{completely unchanged} except for segment
-\texttt{g}'s pin (\texttt{PD2} $\to$ \texttt{PD6}). Confirm every digit 0-9 still
-renders correctly before wiring the keypad -- you are only relocating one pin, not
-redesigning the display logic.
-\end{labexercise}
-
-\begin{labexercise}{Single-row scan \hfill {\small \itshape (35 min)}}
-Repeat Try It 2 as a graded checkpoint: scan \texttt{R1} only, and light the
-Uno's on-board LED (\texttt{PB5}) -- or show it on the display as a placeholder --
-whenever any of \texttt{C1-C4} reads low. Confirm the LED responds \emph{only} to
-keys \texttt{1, 2, 3, A} and stays off for every other key on the pad.
-\end{labexercise}
-
-\begin{labexercise}{Full 4x4 scan and decode \hfill {\small \itshape (90 min)}}
-Extend Exercise 2 into a loop that cycles all four rows. On detecting a pressed
-key, decode its (row, column) pair into a key value using the Quick Reference
-map above, and display it: \texttt{0-9} through \texttt{DIGIT\_TO\_SEG} (reused
-unchanged from Lab 4-1), anything else as a dash (segment \texttt{g} only).
+\begin{labexercise}{Bring-up: port your pre-lab code to this board \hfill {\small \itshape (30 min)}}
+Wire the full circuit per the instructions above (segments, and
+\texttt{PB2-PB5} shared between rows and digit-select, per the Digit-Select \&
+Row Scan box). Port Pre-Lab Tasks 1-2 onto it: \texttt{hex\_to\_seg} should
+already be complete from Task 1; adapt Task 2's decode to read \texttt{PINC}
+(not whatever port you prototyped with at home) and to fit inside each
+\texttt{REFRESH} phase's brief \texttt{SBI DDRB}/\texttt{IN PINC}/\texttt{CBI
+DDRB} window, rather than a free-running loop.
 \begin{itemize}[nosep,leftmargin=*]
-  \item Add a software debounce using your $t_{\text{debounce}}$ from the
-        ``Your Individual Target'' box: after first detecting a key, wait
-        $t_{\text{debounce}}$ and confirm the same key still reads pressed before
-        accepting it.
-  \item \textbf{Trace/predict first, then verify:} before running it, predict what
-        your program displays if two keys in \emph{different} rows and
-        \emph{different} columns are held down at the same time (e.g.\ \texttt{2}
-        and \texttt{8}). Then try it and compare -- does your prediction match,
-        and can you explain any mismatch from how the scan visits rows in order?
+  \item Confirm all 4 digits render every hex digit correctly inside the
+        multiplexed \texttt{REFRESH} loop (not just a single static digit as
+        in Task 1's home test).
+  \item Confirm all 16 keys still produce the correct \texttt{key\_index} when
+        displayed raw (e.g.\ on \texttt{DIGIT1}), exactly as in Task 2's home
+        test -- now running inside \texttt{REFRESH} instead of a standalone loop.
+  \item \textbf{Trace/predict first, then verify:} before running it, count the
+        clock cycles your full 4-phase \texttt{REFRESH} loop actually takes
+        (\texttt{hex\_to\_seg}'s dispatch chain, the \texttt{Delay1ms} calls, the
+        loop overhead) at 16~MHz, and compare the resulting $f_{\text{refresh}}$
+        against your calculated target from the Individual Target box -- does
+        the loop's own overhead eat into your dwell budget the way it did in
+        Lab 4-1?
+  \item If Task 1 or 2 isn't fully solid yet, finish it here first --
+        everything below assumes both are working.
 \end{itemize}
 \end{labexercise}
 
-\begin{labexercise}{Hold last key until the next press \hfill {\small \itshape (25 min)}}
-Confirm your debounce value matches your calculated $t_{\text{debounce}}$ exactly,
-then extend Exercise 3 so the display holds the \emph{last} key pressed
-persistently -- not just for an instant -- until a new key is pressed and
-debounced. Describe in your notebook what the display does differently with
-versus without the debounce check from Exercise 3 (e.g.\ does the digit ever
-flicker or jump to a wrong value on a real keypress?).
+\begin{labexercise}{Debounce \hfill {\small \itshape (20 min)}}
+Add software debounce to \texttt{key\_index} using $t_{\text{debounce}}$ from
+your Individual Target box: after first detecting a non-sentinel column read,
+wait $t_{\text{debounce}}$ and re-scan; only accept the key if the same
+\texttt{key\_index} still reads pressed both times. Record in your notebook
+what you observe \emph{without} debounce (e.g.\ does a single physical press
+ever register as more than one \texttt{key\_index} in a row?) versus with it.
+\end{labexercise}
+
+\begin{labexercise}{Input phase: set \texttt{first} and \texttt{second} \hfill {\small \itshape (30 min)}}
+Before any shift/add/subtract key does anything meaningful, both registers need a
+known starting value. At power-on, \texttt{first} and \texttt{second} both start
+at \texttt{0x00}. Using \emph{only} the \texttt{R1}/\texttt{R2} keys below (the
+input-phase subset of the full Function Key Map), dial \texttt{first} up to your
+$F_{\text{target}}$ and \texttt{second} up to your $S_{\text{target}}$ from the
+Individual Target box, confirming each on the display as you go.
+\begin{center}
+\begin{tabular}{@{}c p{3.15cm} p{3.15cm} p{3.15cm} p{3.15cm}@{}}
+\toprule
+ & \textbf{C1} & \textbf{C2} & \textbf{C3} & \textbf{C4} \\
+\midrule
+\textbf{R1} &
+{\color{accent}\texttt{S1}: inc \texttt{first}} &
+{\color{accent}\texttt{S2}: dec \texttt{first}} &
+{\color{ok!70!black}\texttt{S3}: inc \texttt{second}} &
+{\color{ok!70!black}\texttt{S4}: dec \texttt{second}} \\
+\textbf{R2} &
+{\color{accent}\texttt{S5}: inc inc \texttt{first}} &
+{\color{accent}\texttt{S6}: dec dec \texttt{first}} &
+{\color{ok!70!black}\texttt{S7}: inc inc \texttt{second}} &
+{\color{ok!70!black}\texttt{S8}: dec dec \texttt{second}} \\
+\bottomrule
+\end{tabular}
+\end{center}
+\texttt{R3-R4} (shifts, add, subtract) stay inactive for this exercise -- they're
+Exercise 5's job, once both registers already hold a known value.
+\begin{itemize}[nosep,leftmargin=*]
+  \item This is the input mechanism for this lab -- there is no dedicated 0-9
+        keypad, so every starting value is built one (or two) steps at a time.
+  \item Record in your notebook how many key presses each target took, and
+        whether using \texttt{inc inc}/\texttt{dec dec} instead of \texttt{inc}/
+        \texttt{dec} changed that count the way you'd expect.
+\end{itemize}
+\end{labexercise}
+
+\begin{labexercise}{Function dispatch table \hfill {\small \itshape (70 min)}}
+With a debounced \texttt{key\_index} (\texttt{0-15}) now working, build the
+dispatch: turn \texttt{key\_index} into a call to the matching operation from
+the Function Key Map, updating \texttt{first} and/or \texttt{second}. This is
+the lab's actual point -- everything before this exercise was plumbing to get
+here.
+\begin{itemize}[nosep,leftmargin=*]
+  \item A \texttt{CPI}/\texttt{BRNE} chain (16 branches) or a computed jump
+        (indexed off \texttt{key\_index}) both work -- pick one and justify
+        the choice in your notebook (code size vs.\ clarity vs.\ worst-case
+        latency).
+  \item \texttt{R1-R2}'s 8 keys should already work from Exercise 3's input
+        phase -- this exercise is where \texttt{R3-R4}'s 8 keys (shifts, add,
+        subtract) do something for the first time.
+  \item \texttt{first = first << second} and \texttt{second = second << first}
+        aren't single AVR instructions -- write them as a small loop calling
+        \texttt{LSL} the shift-amount's-worth of times, and note in your
+        notebook why AVR has no single opcode for ``shift by a
+        register-valued amount'' the way some higher-level languages do.
+\end{itemize}
+\end{labexercise}
+
+\begin{labexercise}{Verify arithmetic wraparound \hfill {\small \itshape (30 min)}}
+With the dispatch table from Exercise 4 working, exercise the \texttt{R3-R4}
+add/subtract keys specifically for their 8-bit overflow/underflow behavior.
+\begin{itemize}[nosep,leftmargin=*]
+  \item \textbf{Trace/predict first, then verify:} set \texttt{first = 0xFA} and
+        \texttt{second = 0x0A} (re-dial via Exercise 3's method if needed), predict
+        the displayed hex value of \texttt{first} after pressing \texttt{first =
+        first + second} (\texttt{S13}), using 8-bit wraparound arithmetic --
+        Lecture 5's \texttt{C} flag records exactly this overflow, even though this
+        display only shows the wrapped low byte. Then verify.
+  \item Repeat the same prediction/verify for \texttt{second = second - first}
+        (\texttt{S15}) with \texttt{second < first}, this time using Lecture 5's
+        \texttt{C}-flag-as-borrow behavior on \texttt{SUB}.
+\end{itemize}
 \end{labexercise}
 
 \begin{aicollab}
@@ -229,41 +690,46 @@ flicker or jump to a wrong value on a real keypress?).
 \begin{itemize}[leftmargin=*,nosep]
   \item ``How do I scan a 4x4 matrix keypad in AVR assembly using internal
         pull-up resistors on the columns?''
-  \item ``Why does a cheap matrix keypad without diodes suffer from `ghost'
-        keypresses when multiple keys are held down at once?''
-  \item ``What's a clean way in assembly to convert a (row, column) pair into a
-        single key value, given the keys aren't in a simple row-times-four-plus-
-        column order on every keypad?''
+  \item ``In AVR assembly, can \texttt{SBI}/\texttt{CBI} take a
+        register-computed bit number, or does it need a compile-time constant --
+        and what's the usual workaround when you wanted a loop indexed by a
+        register?''
+  \item ``In AVR assembly, how do \texttt{ADD} and \texttt{SUB} set the carry
+        flag on 8-bit overflow/underflow, and how is that different from the
+        result just silently wrapping?''
 \end{itemize}
 
 \medskip\textbf{Critical check -- verify, don't just accept:}
-Before trusting any decoded output, verify your \emph{physical} keypad's actual
-row/column/key layout against the Quick Reference table above -- don't assume an
-AI tool's row/column map matches your specific keypad, since wiring order varies
-between manufacturers even for keypads that look identical.
+Before trusting any AI-suggested segment resistor value, check it against your
+\emph{own} $V_{CC}$/LED-drop/resistor math (Current Budget box) -- a generic
+answer assumes a specific LED forward voltage that may not match your display's
+actual datasheet.
 
 \medskip\textbf{Know the limit:}
-AI tools will often hand you scanning code that quietly assumes a diode-protected
-keypad capable of full N-key rollover. Most classroom kits are diode-less, so
-holding multiple keys at once can produce a ``phantom'' key that was never
-pressed -- a real hardware limitation the AI's example code won't warn you about
-unless you ask specifically.
+AI tools asked to ``share a GPIO pin between two peripherals'' will often default
+to a diode-OR or an external mux/decoder chip, without noticing when a much
+cheaper option exists: two peripherals whose \emph{idle} state is passively safe
+(floating and driven-low, in this lab's case) can just share the pin directly, as
+long as you can tolerate their features being mutually exclusive in time. Ask
+specifically whether your two signals' idle behavior is passively safe before
+reaching for extra hardware.
 \end{aicollab}
 
 \takehomebanner
 
-\begin{trace}[Decode a scan cycle by hand]
-A scan cycle drives \texttt{R1, R2, R3, R4} low in turn. While \texttt{R3} is low,
-\texttt{IN R17,PIND} reads \texttt{0b11110111} (bits 2-5 are columns \texttt{C1-C4}
-in that order, bit 2 = C1). Every other row's read shows all four column bits
-high. Using the Quick Reference key map, which key was pressed?
+\begin{trace}[8-bit wraparound on the display]
+A student sets \texttt{first = 0xF6} and \texttt{second = 0x1D}, then presses
+\texttt{first = first + second} (\texttt{S13}). Compute the 9-bit true sum, state
+what 8-bit value actually lands in \texttt{first} (and hence what the display
+shows), and state whether the AVR's \texttt{C} flag would be set or cleared after
+the \texttt{ADD} that performs this.
 \end{trace}
 
 \begin{bug}[Pull-ups left disabled]
-A student wired the columns to \texttt{PD2-PD5} exactly as instructed, correctly
-set \texttt{DDRD} bits 2-5 to \texttt{0} (input), but forgot to set the
-corresponding \texttt{PORTD} bits to \texttt{1} -- so the internal pull-ups never
-turn on. No key is being pressed. Predict what \texttt{IN R17,PIND} reads on
+A student wired the columns to \texttt{PC0-PC3} exactly as instructed, correctly
+set \texttt{DDRC} bits 0-3 to \texttt{0} (input), but forgot to set the
+corresponding \texttt{PORTC} bits to \texttt{1} -- so the internal pull-ups never
+turn on. No key is being pressed. Predict what \texttt{IN R16,PINC} reads on
 these four bits, and explain why an unconnected (floating) digital input does not
 reliably read as either a clean \texttt{0} or a clean \texttt{1}.
 \end{bug}
@@ -271,29 +737,37 @@ reliably read as either a clean \texttt{0} or a clean \texttt{1}.
 \begin{writecode}[Hand-write the decode chain]
 On paper, without a computer, simulator, or AI tool, write the \texttt{CPI}/\texttt{BRNE}
 comparison chain (or equivalent) that decodes a scan result for \emph{row R2 only}
-into its four key values (\texttt{4, 5, 6, B}) -- i.e.\ given that R2 was the row
-just driven low, and one column bit is known to read low, write the branches that
-turn ``column 1 is low'' into displaying \texttt{4}, ``column 2 is low'' into
-\texttt{5}, and so on.
+into its four functions (\texttt{inc inc first}, \texttt{dec dec first}, \texttt{inc
+inc second}, \texttt{dec dec second}) -- i.e.\ given that R2 was the row just
+driven low, and one column bit is known to read low, write the branches that turn
+``column 1 is low'' into calling the increment routine twice on \texttt{first},
+and so on for columns 2-4.
 \end{writecode}
 
 \begin{drawex}{Draw the internal matrix}
 Draw the keypad's internal 4x4 grid from memory: 4 horizontal row lines, 4
 vertical column lines, and a switch symbol at each of the 16 crossings, labeled
-with its key. Then, for the key \texttt{6}, trace and highlight the exact current
-path from \texttt{PB1} (R2, driven low) through the pressed switch to \texttt{PD4}
-(C3, read low) -- and explain, from your drawing, why no \emph{other} column
-reads low while only the \texttt{6} key is held.
+with its function. Then, for the key \texttt{first = first + second}, trace and
+highlight the exact current path from \texttt{PB5} (R4, driven low) through the
+pressed switch to \texttt{PC0} (C1, read low) -- and explain, from your drawing,
+why no \emph{other} column reads low while only that key is held.
 \end{drawex}
 
 \section*{Reflection}
 
-In one short paragraph, compare this lab's keypad scanning to Lab 4's display
-multiplexing. Both drive one line at a time in a repeating cycle -- but one is
-scanning \emph{output} (lighting a digit) and the other is scanning \emph{input}
-(reading a key). What stayed structurally the same between them (the one-at-a-time
-timing, the loop-over-four-lines shape), and what's fundamentally different (which
-direction data flows, and why this lab's scan rate has no flicker-fusion deadline
-the way Lab 4's display refresh did)?
+In one short paragraph, compare this lab's keypad scanning to Lab 4-1's display
+multiplexing, and note the new twist this lab adds: the \emph{same} four pins
+(\texttt{PB2-PB5}) now do both jobs, via a single DDR-toggle trick rather than
+two independently-managed signals. What made that sharing possible (both roles
+being ``float = off, drive-low = on''), and what would have broken it if
+digit-select had needed an \emph{active-high} scheme (e.g.\ a common-\emph{anode}
+display) instead? Separately, this lab's reference board also skips Lab 4-1's
+digit-select transistors -- connect that choice back to the Current Budget box:
+was skipping them actually free, or did it just move a cost from the BOM into a
+constraint on your components (resistor values) and honesty about spec margins?
+Finally, connect the \texttt{first}/\texttt{second} keys back to Lecture 5: which
+of the 16 functions map directly onto a single AVR instruction (\texttt{INC},
+\texttt{DEC}, \texttt{LSL}, \texttt{ADD}, \texttt{SUB}), and which ones (like
+\texttt{first = first << second}) need a small loop instead?
 
 \end{document}

@@ -73,6 +73,14 @@ refresh:
     andi nib, 0x0F
     rcall hex_to_seg
     sbi DDRB, 2
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
     in tmp, PINC
     andi tmp, 0x0F
     cpi tmp, NO_KEY_SENTINEL
@@ -104,6 +112,14 @@ p1_end:
     andi nib, 0x0F
     rcall hex_to_seg
     sbi DDRB, 3
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
     in tmp, PINC
     andi tmp, 0x0F
     cpi tmp, NO_KEY_SENTINEL
@@ -136,6 +152,14 @@ p2_end:
     andi nib, 0x0F
     rcall hex_to_seg
     sbi DDRB, 4
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
     in tmp, PINC
     andi tmp, 0x0F
     cpi tmp, NO_KEY_SENTINEL
@@ -167,6 +191,14 @@ p3_end:
     andi nib, 0x0F
     rcall hex_to_seg
     sbi DDRB, 5
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
     in tmp, PINC
     andi tmp, 0x0F
     cpi tmp, NO_KEY_SENTINEL

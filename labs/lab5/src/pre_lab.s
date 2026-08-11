@@ -30,15 +30,31 @@ reset:
 main_loop:
     rcall scan_keypad
     cpi key, 0xFF
-    breq main_loop
+    breq display_digit
+
+    ; New key pressed: update digit register
     mov row, key
+
+display_digit:
     rcall hex_to_seg
+    sbi DDRB, 2          ; Drive DIGIT1 cathode LOW (sinks current to GND)
+    rcall delay_ms       ; Hold display ON solid (~2ms dwell time)
+    cbi DDRB, 2          ; Release cathode before keypad scan
     rjmp main_loop
 
 scan_keypad:
-    ; Row 1
+    ; Row 1 (PB2)
     sbi DDRB, 2
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
     in tmp, PINC
+    cbi DDRB, 2
     andi tmp, 0x0F
     cpi tmp, NO_KEY_SENTINEL
     breq scan_row2
@@ -49,24 +65,32 @@ scan_keypad:
     cpi tmp, 0x0B
     breq key_r1_c3
     ldi key, 0x03
-    rjmp scan_done
+    ret
 
 key_r1_c1:
     ldi key, 0x00
-    rjmp scan_done
+    ret
 
 key_r1_c2:
     ldi key, 0x01
-    rjmp scan_done
+    ret
 
 key_r1_c3:
     ldi key, 0x02
-    rjmp scan_done
+    ret
 
 scan_row2:
-    cbi DDRB, 2
     sbi DDRB, 3
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
     in tmp, PINC
+    cbi DDRB, 3
     andi tmp, 0x0F
     cpi tmp, NO_KEY_SENTINEL
     breq scan_row3
@@ -77,24 +101,32 @@ scan_row2:
     cpi tmp, 0x0B
     breq key_r2_c3
     ldi key, 0x07
-    rjmp scan_done
+    ret
 
 key_r2_c1:
     ldi key, 0x04
-    rjmp scan_done
+    ret
 
 key_r2_c2:
     ldi key, 0x05
-    rjmp scan_done
+    ret
 
 key_r2_c3:
     ldi key, 0x06
-    rjmp scan_done
+    ret
 
 scan_row3:
-    cbi DDRB, 3
     sbi DDRB, 4
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
     in tmp, PINC
+    cbi DDRB, 4
     andi tmp, 0x0F
     cpi tmp, NO_KEY_SENTINEL
     breq scan_row4
@@ -105,24 +137,32 @@ scan_row3:
     cpi tmp, 0x0B
     breq key_r3_c3
     ldi key, 0x0B
-    rjmp scan_done
+    ret
 
 key_r3_c1:
     ldi key, 0x08
-    rjmp scan_done
+    ret
 
 key_r3_c2:
     ldi key, 0x09
-    rjmp scan_done
+    ret
 
 key_r3_c3:
     ldi key, 0x0A
-    rjmp scan_done
+    ret
 
 scan_row4:
-    cbi DDRB, 4
     sbi DDRB, 5
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
     in tmp, PINC
+    cbi DDRB, 5
     andi tmp, 0x0F
     cpi tmp, NO_KEY_SENTINEL
     breq no_key
@@ -133,28 +173,34 @@ scan_row4:
     cpi tmp, 0x0B
     breq key_r4_c3
     ldi key, 0x0F
-    rjmp scan_done
+    ret
 
 key_r4_c1:
     ldi key, 0x0C
-    rjmp scan_done
+    ret
 
 key_r4_c2:
     ldi key, 0x0D
-    rjmp scan_done
+    ret
 
 key_r4_c3:
     ldi key, 0x0E
-    rjmp scan_done
+    ret
 
 no_key:
     ldi key, 0xFF
+    ret
 
-scan_done:
-    cbi DDRB, 2
-    cbi DDRB, 3
-    cbi DDRB, 4
-    cbi DDRB, 5
+delay_ms:
+    ; ~2 ms display dwell time @ 16 MHz
+    ldi r24, 40
+delay_outer:
+    ldi r25, 200
+delay_inner:
+    dec r25
+    brne delay_inner
+    dec r24
+    brne delay_outer
     ret
 
 hex_to_seg:

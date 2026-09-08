@@ -3382,7 +3382,7 @@
 		(in_pos_files yes)
 		(dnp no)
 		(uuid "10591f73-dfbd-438c-84f3-b1ef392ddcfa")
-		(property "Reference" "#PWR009"
+		(property "Reference" "#PWR09"
 			(at 187.49 156.95 0)
 			(hide yes)
 			(show_name no)
@@ -3441,7 +3441,7 @@
 		(instances
 			(project "lab4_2_shield"
 				(path "/d2732c36-58ec-418a-9ad1-28d53cb8d85c"
-					(reference "#PWR009")
+					(reference "#PWR09")
 					(unit 1)
 				)
 			)
@@ -3460,7 +3460,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "12570c02-ebc8-41f5-b4e1-19b43b6211ed")
-		(property "Reference" "R6"
+		(property "Reference" "R13"
 			(at 298.45 67.31 90)
 			(show_name no)
 			(do_not_autoplace no)
@@ -3522,7 +3522,7 @@
 		(instances
 			(project "lab4_2_shield"
 				(path "/d2732c36-58ec-418a-9ad1-28d53cb8d85c"
-					(reference "R6")
+					(reference "R13")
 					(unit 1)
 				)
 			)
@@ -3619,7 +3619,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "233edd9c-5521-4a01-a82a-167476a88e7f")
-		(property "Reference" "R7"
+		(property "Reference" "R11"
 			(at 292.1 69.85 90)
 			(show_name no)
 			(do_not_autoplace no)
@@ -3681,7 +3681,7 @@
 		(instances
 			(project "lab4_2_shield"
 				(path "/d2732c36-58ec-418a-9ad1-28d53cb8d85c"
-					(reference "R7")
+					(reference "R11")
 					(unit 1)
 				)
 			)
@@ -3855,7 +3855,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "356e4880-70ad-48a9-979b-d07609492dd6")
-		(property "Reference" "Q3"
+		(property "Reference" "Q1"
 			(at 317.5 143.5099 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -3947,7 +3947,7 @@
 		(instances
 			(project "lab4_2_shield"
 				(path "/d2732c36-58ec-418a-9ad1-28d53cb8d85c"
-					(reference "Q3")
+					(reference "Q1")
 					(unit 1)
 				)
 			)
@@ -4148,7 +4148,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "4a33c5fd-9ed8-4802-a6a9-cb9e436b7837")
-		(property "Reference" "R11"
+		(property "Reference" "R7"
 			(at 266.7 80.01 90)
 			(show_name no)
 			(do_not_autoplace no)
@@ -4210,7 +4210,7 @@
 		(instances
 			(project "lab4_2_shield"
 				(path "/d2732c36-58ec-418a-9ad1-28d53cb8d85c"
-					(reference "R11")
+					(reference "R7")
 					(unit 1)
 				)
 			)
@@ -4227,7 +4227,7 @@
 		(in_pos_files yes)
 		(dnp no)
 		(uuid "5510a4f9-9021-4447-b54d-e9bea18205f4")
-		(property "Reference" "J1"
+		(property "Reference" "J2"
 			(at 97.79 248.31 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -4306,7 +4306,7 @@
 		(instances
 			(project "lab4_2_shield"
 				(path "/d2732c36-58ec-418a-9ad1-28d53cb8d85c"
-					(reference "J1")
+					(reference "J2")
 					(unit 1)
 				)
 			)
@@ -4631,7 +4631,7 @@
 		(in_pos_files yes)
 		(dnp no)
 		(uuid "84678361-3b5c-4ca3-bf51-9f14c8b3e1cb")
-		(property "Reference" "R13"
+		(property "Reference" "R12"
 			(at 293.37 134.97 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -4692,7 +4692,7 @@
 		(instances
 			(project "lab4_2_shield"
 				(path "/d2732c36-58ec-418a-9ad1-28d53cb8d85c"
-					(reference "R13")
+					(reference "R12")
 					(unit 1)
 				)
 			)
@@ -4709,7 +4709,7 @@
 		(in_pos_files yes)
 		(dnp no)
 		(uuid "894ab1c8-0704-4231-b743-6aa6ea43c858")
-		(property "Reference" "#PWR001"
+		(property "Reference" "#PWR02"
 			(at 60.19 89.14 0)
 			(hide yes)
 			(show_name no)
@@ -4768,7 +4768,7 @@
 		(instances
 			(project "lab4_2_shield"
 				(path "/d2732c36-58ec-418a-9ad1-28d53cb8d85c"
-					(reference "#PWR001")
+					(reference "#PWR02")
 					(unit 1)
 				)
 			)
@@ -4878,7 +4878,7 @@
 		(in_pos_files yes)
 		(dnp no)
 		(uuid "8b2975e1-4b55-47a8-95df-f31ba5639595")
-		(property "Reference" "#PWR002"
+		(property "Reference" "#PWR04"
 			(at 90.19 89.14 0)
 			(hide yes)
 			(show_name no)
@@ -4937,7 +4937,7 @@
 		(instances
 			(project "lab4_2_shield"
 				(path "/d2732c36-58ec-418a-9ad1-28d53cb8d85c"
-					(reference "#PWR002")
+					(reference "#PWR04")
 					(unit 1)
 				)
 			)
@@ -4954,7 +4954,7 @@
 		(in_pos_files yes)
 		(dnp no)
 		(uuid "8bdfe637-bb12-40b7-bf9d-4fa240934a74")
-		(property "Reference" "#PWR005"
+		(property "Reference" "#PWR01"
 			(at 47.49 156.95 0)
 			(hide yes)
 			(show_name no)
@@ -5013,7 +5013,7 @@
 		(instances
 			(project "lab4_2_shield"
 				(path "/d2732c36-58ec-418a-9ad1-28d53cb8d85c"
-					(reference "#PWR005")
+					(reference "#PWR01")
 					(unit 1)
 				)
 			)
@@ -5108,7 +5108,7 @@
 		(in_pos_files yes)
 		(dnp no)
 		(uuid "9e1eff3d-6770-4ef5-bb6d-3f0b58430ac4")
-		(property "Reference" "#PWR008"
+		(property "Reference" "#PWR08"
 			(at 152.49 156.95 0)
 			(hide yes)
 			(show_name no)
@@ -5167,7 +5167,7 @@
 		(instances
 			(project "lab4_2_shield"
 				(path "/d2732c36-58ec-418a-9ad1-28d53cb8d85c"
-					(reference "#PWR008")
+					(reference "#PWR08")
 					(unit 1)
 				)
 			)
@@ -5343,7 +5343,7 @@
 		(in_pos_files yes)
 		(dnp no)
 		(uuid "c91b1e69-e01d-4465-9951-e21c09669afc")
-		(property "Reference" "#PWR003"
+		(property "Reference" "#PWR06"
 			(at 120.19 89.14 0)
 			(hide yes)
 			(show_name no)
@@ -5402,7 +5402,7 @@
 		(instances
 			(project "lab4_2_shield"
 				(path "/d2732c36-58ec-418a-9ad1-28d53cb8d85c"
-					(reference "#PWR003")
+					(reference "#PWR06")
 					(unit 1)
 				)
 			)
@@ -5421,7 +5421,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "d233925c-f671-4e81-83f3-0455e2f50406")
-		(property "Reference" "R10"
+		(property "Reference" "R8"
 			(at 273.05 77.47 90)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5483,7 +5483,7 @@
 		(instances
 			(project "lab4_2_shield"
 				(path "/d2732c36-58ec-418a-9ad1-28d53cb8d85c"
-					(reference "R10")
+					(reference "R8")
 					(unit 1)
 				)
 			)
@@ -5590,7 +5590,7 @@
 		(in_pos_files yes)
 		(dnp no)
 		(uuid "d4b3f830-e268-402b-b4dd-a9dd71387c5b")
-		(property "Reference" "#PWR006"
+		(property "Reference" "#PWR03"
 			(at 82.49 156.95 0)
 			(hide yes)
 			(show_name no)
@@ -5649,7 +5649,7 @@
 		(instances
 			(project "lab4_2_shield"
 				(path "/d2732c36-58ec-418a-9ad1-28d53cb8d85c"
-					(reference "#PWR006")
+					(reference "#PWR03")
 					(unit 1)
 				)
 			)
@@ -5666,7 +5666,7 @@
 		(in_pos_files yes)
 		(dnp no)
 		(uuid "d5337053-a759-4d87-a0c3-22980f58bf92")
-		(property "Reference" "#PWR007"
+		(property "Reference" "#PWR05"
 			(at 117.49 156.95 0)
 			(hide yes)
 			(show_name no)
@@ -5725,7 +5725,7 @@
 		(instances
 			(project "lab4_2_shield"
 				(path "/d2732c36-58ec-418a-9ad1-28d53cb8d85c"
-					(reference "#PWR007")
+					(reference "#PWR05")
 					(unit 1)
 				)
 			)
@@ -5744,7 +5744,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "d57b101b-a96f-46d2-bd37-52ee2ca9a6e2")
-		(property "Reference" "R12"
+		(property "Reference" "R6"
 			(at 260.35 82.55 90)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5806,7 +5806,7 @@
 		(instances
 			(project "lab4_2_shield"
 				(path "/d2732c36-58ec-418a-9ad1-28d53cb8d85c"
-					(reference "R12")
+					(reference "R6")
 					(unit 1)
 				)
 			)
@@ -5929,7 +5929,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "d61e29ba-352b-4bb6-b948-490418c67970")
-		(property "Reference" "R8"
+		(property "Reference" "R10"
 			(at 285.75 72.39 90)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5991,7 +5991,7 @@
 		(instances
 			(project "lab4_2_shield"
 				(path "/d2732c36-58ec-418a-9ad1-28d53cb8d85c"
-					(reference "R8")
+					(reference "R10")
 					(unit 1)
 				)
 			)
@@ -6164,7 +6164,7 @@
 		(in_pos_files yes)
 		(dnp no)
 		(uuid "e43f018d-9cb9-4ba1-85ba-8bbabf82440f")
-		(property "Reference" "#PWR004"
+		(property "Reference" "#PWR07"
 			(at 150.19 89.14 0)
 			(hide yes)
 			(show_name no)
@@ -6223,7 +6223,7 @@
 		(instances
 			(project "lab4_2_shield"
 				(path "/d2732c36-58ec-418a-9ad1-28d53cb8d85c"
-					(reference "#PWR004")
+					(reference "#PWR07")
 					(unit 1)
 				)
 			)
@@ -6319,7 +6319,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "e9f5e48f-cf3e-4b68-8870-b4e30e795099")
-		(property "Reference" "Q4"
+		(property "Reference" "Q2"
 			(at 364.49 144.7799 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6411,7 +6411,7 @@
 		(instances
 			(project "lab4_2_shield"
 				(path "/d2732c36-58ec-418a-9ad1-28d53cb8d85c"
-					(reference "Q4")
+					(reference "Q2")
 					(unit 1)
 				)
 			)
@@ -6428,7 +6428,7 @@
 		(in_pos_files yes)
 		(dnp no)
 		(uuid "eded190a-98d1-40ef-b270-46860036a055")
-		(property "Reference" "J2"
+		(property "Reference" "J1"
 			(at 97.79 188.31 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6507,7 +6507,7 @@
 		(instances
 			(project "lab4_2_shield"
 				(path "/d2732c36-58ec-418a-9ad1-28d53cb8d85c"
-					(reference "J2")
+					(reference "J1")
 					(unit 1)
 				)
 			)

@@ -1861,7 +1861,7 @@
 	)
 	(text "Digit-select: Q1/Q2 sink each digit's common-cathode to GND;\ndriving D12/D13 HIGH selects that digit (see Lab 4-1)."
 		(exclude_from_sim no)
-		(at 336.296 181.864 0)
+		(at 335.28 182.626 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -1871,7 +1871,7 @@
 	)
 	(text "Buttons SW1-SW4 -> D8-D11 (internal pull-up, no external resistor)"
 		(exclude_from_sim no)
-		(at 45.11 47.79 0)
+		(at 102.362 54.864 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -1881,7 +1881,7 @@
 	)
 	(text "Shield header pins carry net labels matching Uno signal names.\nJ3 (Power) is mechanically required for the shield outline but is\nfully unused electrically on this board (see README)."
 		(exclude_from_sim no)
-		(at 186.596 218.186 0)
+		(at 144.526 223.52 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -1891,7 +1891,7 @@
 	)
 	(text "LED1-LED5 -> 330ohm series resistor -> D3-D7; cathode -> GND"
 		(exclude_from_sim no)
-		(at 45.11 82.79 0)
+		(at 118.872 164.084 0)
 		(effects
 			(font
 				(size 1.27 1.27)

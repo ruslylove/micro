@@ -20,3 +20,15 @@ src: ./lecture-5-arithmetic-logic-instructions.md
 ---
 src: ./lecture-6-avr-advanced-assembly.md
 ---
+---
+src: ./lecture-7-avr-programming-in-c.md
+---
+---
+src: ./lecture-8-avr-hardware-connections-and-flash-loading.md
+---
+---
+src: ./lecture-9-avr-timer-programming.md
+---
+---
+src: ./lecture-10-avr-interrupt-programming.md
+---
